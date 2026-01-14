@@ -40,6 +40,9 @@ public class CameraCaptureEditor : EditorWindow
     private int profileIndex = 0;
     private string profile = "Splat3";
 
+    private int imageFormatIndex = 0;
+    private string imageFormat = "png";
+
     int w = 1920;
     int h = 1080;
     int rays = 500;
@@ -56,6 +59,12 @@ public class CameraCaptureEditor : EditorWindow
         cameraToUse = (Camera)EditorGUILayout.ObjectField("Camera", cameraToUse, typeof(Camera), true);
         w = EditorGUILayout.IntField("Width (px)", w);
         h = EditorGUILayout.IntField("Height (px)", h);
+        GUILayout.Space(10);
+
+        GUILayout.Label("Image Format", EditorStyles.boldLabel);
+        imageFormatIndex = GUILayout.Toolbar(imageFormatIndex, new string[] { "PNG", "EXR" });
+        imageFormat = imageFormatIndex == 0 ? "png" : "exr";
+
         GUILayout.Space(10);
         rays = EditorGUILayout.IntField("PointCloud/View", rays);
         GUILayout.Space(10);
@@ -359,7 +368,7 @@ public class CameraCaptureEditor : EditorWindow
                     Quaternion q = QuaternionFromMatrix(R);
                     Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
-                    string imageName = $"view_{imageId:D3}.png";
+                    string imageName = $"view_{imageId:D3}.{imageFormat}";
                     string imagePath = Path.Combine(folderPath, imageName);
 
                     cameraToUse.clearFlags = CameraClearFlags.SolidColor;
@@ -372,7 +381,8 @@ public class CameraCaptureEditor : EditorWindow
                     tex.Apply();
                     CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
 
-                    File.WriteAllBytes(imagePath, tex.EncodeToPNG());
+                    byte[] imageData = imageFormat == "exr" ? tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP) : tex.EncodeToPNG();
+                    File.WriteAllBytes(imagePath, imageData);
 
                     imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
                     imgWriter.WriteLine();
@@ -593,7 +603,7 @@ public class CameraCaptureEditor : EditorWindow
                             Quaternion q = QuaternionFromMatrix(R);
                             Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
-                            string imageName = $"vol_{imageId:D4}.png";
+                            string imageName = $"vol_{imageId:D4}.{imageFormat}";
                             string imagePath = Path.Combine(folderPath, imageName);
 
 
@@ -643,9 +653,9 @@ public class CameraCaptureEditor : EditorWindow
                             tex.Apply();
                             CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
 
-                            byte[] pngData = tex.EncodeToPNG();
-                            File.WriteAllBytes(imagePath, pngData);
-                            pngData = null;
+                            byte[] imageData = imageFormat == "exr" ? tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP) : tex.EncodeToPNG();
+                            File.WriteAllBytes(imagePath, imageData);
+                            imageData = null;
 
 
                             imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
