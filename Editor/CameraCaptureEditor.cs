@@ -43,6 +43,50 @@ public class CameraCaptureEditor : EditorWindow
     int w = 1920;
     int h = 1080;
     int rays = 500;
+
+    // Lighting enhancement settings for better character rendering
+    private struct LightingBackup
+    {
+        public Color ambientLight;
+        public UnityEngine.Rendering.AmbientMode ambientMode;
+        public float ambientIntensity;
+        public Color ambientSkyColor;
+        public Color ambientEquatorColor;
+        public Color ambientGroundColor;
+    }
+
+    private LightingBackup BackupLightingSettings()
+    {
+        LightingBackup backup = new LightingBackup
+        {
+            ambientLight = RenderSettings.ambientLight,
+            ambientMode = RenderSettings.ambientMode,
+            ambientIntensity = RenderSettings.ambientIntensity,
+            ambientSkyColor = RenderSettings.ambientSkyColor,
+            ambientEquatorColor = RenderSettings.ambientEquatorColor,
+            ambientGroundColor = RenderSettings.ambientGroundColor
+        };
+        return backup;
+    }
+
+    private void EnhanceLightingForCapture()
+    {
+        // Enhance ambient lighting to ensure characters are well-lit
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.5f, 1f); // Increased ambient light
+        RenderSettings.ambientIntensity = 1.0f;
+    }
+
+    private void RestoreLightingSettings(LightingBackup backup)
+    {
+        RenderSettings.ambientLight = backup.ambientLight;
+        RenderSettings.ambientMode = backup.ambientMode;
+        RenderSettings.ambientIntensity = backup.ambientIntensity;
+        RenderSettings.ambientSkyColor = backup.ambientSkyColor;
+        RenderSettings.ambientEquatorColor = backup.ambientEquatorColor;
+        RenderSettings.ambientGroundColor = backup.ambientGroundColor;
+    }
+
     [MenuItem("Tools/Gaussian Splatting/Capture + COLMAP")]
     public static void ShowWindow()
     {
@@ -315,6 +359,9 @@ public class CameraCaptureEditor : EditorWindow
             writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
             int pointId = 1;
 
+            // Backup and enhance lighting for better character rendering
+            LightingBackup lightingBackup = BackupLightingSettings();
+            EnhanceLightingForCapture();
 
             foreach (SkinnedMeshRenderer r in GameObject.FindObjectsOfType<SkinnedMeshRenderer>())
             {
@@ -425,6 +472,9 @@ public class CameraCaptureEditor : EditorWindow
                 }
             }
             writer3D.Close();
+
+            // Restore original lighting settings
+            RestoreLightingSettings(lightingBackup);
 
             cameraToUse.targetTexture = null;
             RenderTexture.active = null;
@@ -561,6 +611,9 @@ public class CameraCaptureEditor : EditorWindow
             writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
             int pointId = 1;
 
+            // Backup and enhance lighting for better character rendering
+            LightingBackup lightingBackup = BackupLightingSettings();
+            EnhanceLightingForCapture();
 
             for (int x = 0; x < subdivX; x++)
             {
@@ -706,6 +759,9 @@ public class CameraCaptureEditor : EditorWindow
             }
 
             writer3D.Close();
+
+            // Restore original lighting settings
+            RestoreLightingSettings(lightingBackup);
 
             cameraToUse.targetTexture = null;
             RenderTexture.active = null;
