@@ -44,6 +44,11 @@ public class CameraCaptureEditor : EditorWindow
     int h = 1080;
     int rays = 500;
 
+    // Image format settings
+    private int imageFormatIndex = 0;
+    private string[] imageFormatOptions = new string[] { "PNG (8-bit, lossy)", "EXR (32-bit float, lossless)" };
+    private bool useEXR = false;
+
     // Lighting enhancement settings for better character rendering
     private struct LightingBackup
     {
@@ -168,6 +173,21 @@ public class CameraCaptureEditor : EditorWindow
         w = EditorGUILayout.IntField("Width (px)", w);
         h = EditorGUILayout.IntField("Height (px)", h);
         GUILayout.Space(10);
+
+        // Image format selection
+        GUILayout.Label("Image Format", EditorStyles.boldLabel);
+        imageFormatIndex = GUILayout.Toolbar(imageFormatIndex, imageFormatOptions);
+        useEXR = (imageFormatIndex == 1);
+        if (useEXR)
+        {
+            EditorGUILayout.HelpBox("EXR format preserves full HDR data without quality loss. Recommended for accurate color reproduction!", MessageType.Info);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("PNG format uses 8-bit color, may cause precision loss with HDR lighting.", MessageType.Warning);
+        }
+        GUILayout.Space(10);
+
         rays = EditorGUILayout.IntField("PointCloud/View", rays);
         GUILayout.Space(10);
         runtimeAnim = EditorGUILayout.Toggle("Capture Runtime", runtimeAnim);
@@ -231,6 +251,31 @@ public class CameraCaptureEditor : EditorWindow
     private static Quaternion QuaternionFromMatrix(Matrix4x4 m)
     {
         return Quaternion.LookRotation(m.GetColumn(2), m.GetColumn(1));
+    }
+
+    /// <summary>
+    /// Save texture to file in the specified format (PNG or EXR)
+    /// </summary>
+    private byte[] EncodeTexture(Texture2D tex, bool useEXRFormat)
+    {
+        if (useEXRFormat)
+        {
+            // EXR format: 32-bit float, lossless, preserves HDR data
+            return tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+        }
+        else
+        {
+            // PNG format: 8-bit, lossy for HDR data
+            return tex.EncodeToPNG();
+        }
+    }
+
+    /// <summary>
+    /// Get file extension based on format
+    /// </summary>
+    private string GetImageExtension()
+    {
+        return useEXR ? ".exr" : ".png";
     }
 
     private void RunPostshotBatch()
@@ -477,7 +522,7 @@ public class CameraCaptureEditor : EditorWindow
                     Quaternion q = QuaternionFromMatrix(R);
                     Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
-                    string imageName = $"view_{imageId:D3}.png";
+                    string imageName = $"view_{imageId:D3}{GetImageExtension()}";
                     string imagePath = Path.Combine(folderPath, imageName);
 
                     // Temporarily set camera to use original settings for rendering
@@ -489,7 +534,7 @@ public class CameraCaptureEditor : EditorWindow
                     tex.Apply();
                     CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
 
-                    File.WriteAllBytes(imagePath, tex.EncodeToPNG());
+                    File.WriteAllBytes(imagePath, EncodeTexture(tex, useEXR));
 
                     imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
                     imgWriter.WriteLine();
@@ -722,7 +767,7 @@ public class CameraCaptureEditor : EditorWindow
                             Quaternion q = QuaternionFromMatrix(R);
                             Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
-                            string imageName = $"vol_{imageId:D4}.png";
+                            string imageName = $"vol_{imageId:D4}{GetImageExtension()}";
                             string imagePath = Path.Combine(folderPath, imageName);
 
 
@@ -770,9 +815,9 @@ public class CameraCaptureEditor : EditorWindow
                             tex.Apply();
                             CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
 
-                            byte[] pngData = tex.EncodeToPNG();
-                            File.WriteAllBytes(imagePath, pngData);
-                            pngData = null;
+                            byte[] imageData = EncodeTexture(tex, useEXR);
+                            File.WriteAllBytes(imagePath, imageData);
+                            imageData = null;
 
 
                             imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");

@@ -23,6 +23,11 @@ public class DirectGameViewCapture : EditorWindow
     private bool isCapturing = false;
     private EditorCoroutine captureCoroutine;
 
+    // Image format settings
+    private int imageFormatIndex = 0;
+    private string[] imageFormatOptions = new string[] { "PNG (8-bit, lossy)", "EXR (32-bit float, lossless)" };
+    private bool useEXR = false;
+
     [MenuItem("Tools/Gaussian Splatting/Direct Game View Capture")]
     public static void ShowWindow()
     {
@@ -58,6 +63,21 @@ public class DirectGameViewCapture : EditorWindow
 
         captureWidth = EditorGUILayout.IntField("Width (px)", captureWidth);
         captureHeight = EditorGUILayout.IntField("Height (px)", captureHeight);
+
+        GUILayout.Space(10);
+
+        // Image format selection
+        GUILayout.Label("Image Format", EditorStyles.boldLabel);
+        imageFormatIndex = GUILayout.Toolbar(imageFormatIndex, imageFormatOptions);
+        useEXR = (imageFormatIndex == 1);
+        if (useEXR)
+        {
+            EditorGUILayout.HelpBox("EXR format preserves full HDR data without quality loss. Recommended for accurate color reproduction!", MessageType.Info);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("PNG format uses 8-bit color, may cause precision loss with HDR lighting.", MessageType.Warning);
+        }
 
         GUILayout.Space(10);
 
@@ -209,9 +229,9 @@ public class DirectGameViewCapture : EditorWindow
                     Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
                     // Save image
-                    string imageName = $"view_{imageId:D3}.png";
+                    string imageName = $"view_{imageId:D3}{GetImageExtension()}";
                     string imagePath = Path.Combine(outputFolder, imageName);
-                    File.WriteAllBytes(imagePath, screenshot.EncodeToPNG());
+                    File.WriteAllBytes(imagePath, EncodeTexture(screenshot, useEXR));
 
                     // Write COLMAP data
                     imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
@@ -240,7 +260,7 @@ public class DirectGameViewCapture : EditorWindow
         isCapturing = false;
 
         Debug.Log($"✓ Game View capture complete! {totalImages} images saved to {outputFolder}");
-        EditorUtility.RevealInFinder(Path.Combine(outputFolder, "view_001.png"));
+        EditorUtility.RevealInFinder(Path.Combine(outputFolder, $"view_001{GetImageExtension()}"));
     }
 
     private Texture2D CaptureScreen()
@@ -250,6 +270,31 @@ public class DirectGameViewCapture : EditorWindow
         screenshot.ReadPixels(new Rect(0, 0, captureWidth, captureHeight), 0, 0);
         screenshot.Apply();
         return screenshot;
+    }
+
+    /// <summary>
+    /// Encode texture to file format (PNG or EXR)
+    /// </summary>
+    private byte[] EncodeTexture(Texture2D tex, bool useEXRFormat)
+    {
+        if (useEXRFormat)
+        {
+            // EXR format: 32-bit float, lossless, preserves HDR data
+            return tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+        }
+        else
+        {
+            // PNG format: 8-bit, lossy for HDR data
+            return tex.EncodeToPNG();
+        }
+    }
+
+    /// <summary>
+    /// Get file extension based on format
+    /// </summary>
+    private string GetImageExtension()
+    {
+        return useEXR ? ".exr" : ".png";
     }
 
     private static Quaternion QuaternionFromMatrix(Matrix4x4 m)
