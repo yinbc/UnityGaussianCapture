@@ -60,7 +60,7 @@ public class RenderingDiagnostics : EditorWindow
         report.AppendLine($"  Color Space: {PlayerSettings.colorSpace}");
         report.AppendLine($"    ⚠️ Linear vs Gamma affects brightness significantly!");
         report.AppendLine($"  Graphics API: {SystemInfo.graphicsDeviceType}");
-        report.AppendLine($"  HDR Support: {SystemInfo.supportsRenderTextureFormat(RenderTextureFormat.DefaultHDR)}");
+        report.AppendLine($"  HDR Support: {SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR)}");
         report.AppendLine();
 
         // 2. Camera Settings
@@ -216,7 +216,7 @@ public class RenderingDiagnostics : EditorWindow
         // Check HDR
         comparison.AppendLine("3. HDR SETTINGS");
         comparison.AppendLine($"   Camera HDR: {selectedCamera.allowHDR}");
-        comparison.AppendLine($"   System HDR Support: {SystemInfo.supportsRenderTextureFormat(RenderTextureFormat.DefaultHDR)}");
+        comparison.AppendLine($"   System HDR Support: {SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR)}");
         if (!selectedCamera.allowHDR && PlayerSettings.colorSpace == ColorSpace.Linear)
         {
             comparison.AppendLine("   ⚠️ Linear color space works best with HDR enabled!");
