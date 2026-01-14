@@ -53,10 +53,21 @@ public class CameraCaptureEditor : EditorWindow
         public Color ambientSkyColor;
         public Color ambientEquatorColor;
         public Color ambientGroundColor;
+        public Dictionary<Light, float> lightIntensities; // Store original light intensities
     }
+
+    private GameObject tempCaptureLight = null; // Temporary light for capture
 
     private LightingBackup BackupLightingSettings()
     {
+        // Backup all scene lights' intensities
+        Dictionary<Light, float> lightIntensities = new Dictionary<Light, float>();
+        Light[] lights = GameObject.FindObjectsOfType<Light>();
+        foreach (Light light in lights)
+        {
+            lightIntensities[light] = light.intensity;
+        }
+
         LightingBackup backup = new LightingBackup
         {
             ambientLight = RenderSettings.ambientLight,
@@ -64,7 +75,8 @@ public class CameraCaptureEditor : EditorWindow
             ambientIntensity = RenderSettings.ambientIntensity,
             ambientSkyColor = RenderSettings.ambientSkyColor,
             ambientEquatorColor = RenderSettings.ambientEquatorColor,
-            ambientGroundColor = RenderSettings.ambientGroundColor
+            ambientGroundColor = RenderSettings.ambientGroundColor,
+            lightIntensities = lightIntensities
         };
         return backup;
     }
@@ -72,9 +84,45 @@ public class CameraCaptureEditor : EditorWindow
     private void EnhanceLightingForCapture()
     {
         // Enhance ambient lighting to ensure characters are well-lit
-        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.5f, 1f); // Increased ambient light
-        RenderSettings.ambientIntensity = 1.0f;
+        // Use trilight mode for more natural lighting similar to Editor
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = new Color(0.8f, 0.8f, 0.8f, 1f); // Bright sky
+        RenderSettings.ambientEquatorColor = new Color(0.6f, 0.6f, 0.6f, 1f); // Medium equator
+        RenderSettings.ambientGroundColor = new Color(0.4f, 0.4f, 0.4f, 1f); // Ground reflection
+        RenderSettings.ambientIntensity = 1.2f; // Increased intensity
+
+        // Check for existing directional lights and boost them
+        Light[] lights = GameObject.FindObjectsOfType<Light>();
+        bool hasStrongDirectionalLight = false;
+
+        foreach (Light light in lights)
+        {
+            if (light.type == LightType.Directional && light.enabled)
+            {
+                // Ensure directional lights are bright enough
+                if (light.intensity < 1.0f)
+                {
+                    light.intensity = 1.0f;
+                }
+                if (light.intensity >= 1.0f)
+                {
+                    hasStrongDirectionalLight = true;
+                }
+            }
+        }
+
+        // If no strong directional light exists, create a temporary one
+        // This ensures consistent lighting similar to Editor's default scene view
+        if (!hasStrongDirectionalLight)
+        {
+            tempCaptureLight = new GameObject("TempCaptureLight");
+            Light tempLight = tempCaptureLight.AddComponent<Light>();
+            tempLight.type = LightType.Directional;
+            tempLight.intensity = 1.0f;
+            tempLight.color = Color.white;
+            // Position from top-front-right, similar to Unity's default scene light
+            tempCaptureLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+        }
     }
 
     private void RestoreLightingSettings(LightingBackup backup)
@@ -85,6 +133,25 @@ public class CameraCaptureEditor : EditorWindow
         RenderSettings.ambientSkyColor = backup.ambientSkyColor;
         RenderSettings.ambientEquatorColor = backup.ambientEquatorColor;
         RenderSettings.ambientGroundColor = backup.ambientGroundColor;
+
+        // Restore all light intensities
+        if (backup.lightIntensities != null)
+        {
+            foreach (var kvp in backup.lightIntensities)
+            {
+                if (kvp.Key != null) // Check if light still exists
+                {
+                    kvp.Key.intensity = kvp.Value;
+                }
+            }
+        }
+
+        // Clean up temporary capture light if it was created
+        if (tempCaptureLight != null)
+        {
+            DestroyImmediate(tempCaptureLight);
+            tempCaptureLight = null;
+        }
     }
 
     [MenuItem("Tools/Gaussian Splatting/Capture + COLMAP")]
