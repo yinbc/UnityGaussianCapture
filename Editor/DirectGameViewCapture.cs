@@ -25,8 +25,10 @@ public class DirectGameViewCapture : EditorWindow
 
     // Image format settings
     private int imageFormatIndex = 0;
-    private string[] imageFormatOptions = new string[] { "PNG (8-bit, lossy)", "EXR (32-bit float, lossless)" };
+    private string[] imageFormatOptions = new string[] { "PNG (8-bit)", "PNG + Tone Mapping", "EXR (32-bit HDR)" };
     private bool useEXR = false;
+    private bool useToneMapping = false;
+    private float tonemapExposure = 1.0f;
 
     [MenuItem("Tools/Gaussian Splatting/Direct Game View Capture")]
     public static void ShowWindow()
@@ -69,14 +71,21 @@ public class DirectGameViewCapture : EditorWindow
         // Image format selection
         GUILayout.Label("Image Format", EditorStyles.boldLabel);
         imageFormatIndex = GUILayout.Toolbar(imageFormatIndex, imageFormatOptions);
-        useEXR = (imageFormatIndex == 1);
+        useEXR = (imageFormatIndex == 2);
+        useToneMapping = (imageFormatIndex == 1);
+
         if (useEXR)
         {
-            EditorGUILayout.HelpBox("EXR format preserves full HDR data without quality loss. Recommended for accurate color reproduction!", MessageType.Info);
+            EditorGUILayout.HelpBox("EXR format preserves full HDR data without quality loss. Best for maximum accuracy!", MessageType.Info);
+        }
+        else if (useToneMapping)
+        {
+            EditorGUILayout.HelpBox("PNG + Tone Mapping: Applies tone mapping to HDR data before saving. Perfect balance of quality and compatibility!", MessageType.Info);
+            tonemapExposure = EditorGUILayout.Slider("Exposure", tonemapExposure, 0.1f, 3.0f);
         }
         else
         {
-            EditorGUILayout.HelpBox("PNG format uses 8-bit color, may cause precision loss with HDR lighting.", MessageType.Warning);
+            EditorGUILayout.HelpBox("Standard PNG: Direct 8-bit conversion. May lose HDR information if scene uses bright lighting.", MessageType.Warning);
         }
 
         GUILayout.Space(10);
@@ -231,7 +240,7 @@ public class DirectGameViewCapture : EditorWindow
                     // Save image
                     string imageName = $"view_{imageId:D3}{GetImageExtension()}";
                     string imagePath = Path.Combine(outputFolder, imageName);
-                    File.WriteAllBytes(imagePath, EncodeTexture(screenshot, useEXR));
+                    File.WriteAllBytes(imagePath, EncodeTexture(screenshot, useEXR, useToneMapping, tonemapExposure));
 
                     // Write COLMAP data
                     imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
@@ -273,18 +282,73 @@ public class DirectGameViewCapture : EditorWindow
     }
 
     /// <summary>
-    /// Encode texture to file format (PNG or EXR)
+    /// Apply tone mapping to HDR texture for LDR display
+    /// Uses Reinhard tone mapping operator
     /// </summary>
-    private byte[] EncodeTexture(Texture2D tex, bool useEXRFormat)
+    private Texture2D ApplyToneMapping(Texture2D hdrTex, float exposure)
+    {
+        int width = hdrTex.width;
+        int height = hdrTex.height;
+
+        Texture2D ldrTex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        Color[] hdrPixels = hdrTex.GetPixels();
+        Color[] ldrPixels = new Color[hdrPixels.Length];
+
+        for (int i = 0; i < hdrPixels.Length; i++)
+        {
+            Color hdr = hdrPixels[i];
+
+            // Apply exposure
+            hdr.r *= exposure;
+            hdr.g *= exposure;
+            hdr.b *= exposure;
+
+            // Reinhard tone mapping: RGB / (1 + RGB)
+            // This maps [0, ∞) to [0, 1)
+            Color ldr;
+            ldr.r = hdr.r / (1.0f + hdr.r);
+            ldr.g = hdr.g / (1.0f + hdr.g);
+            ldr.b = hdr.b / (1.0f + hdr.b);
+            ldr.a = hdr.a;
+
+            // Apply gamma correction for better visual appearance
+            // (assuming target is sRGB display)
+            if (PlayerSettings.colorSpace == ColorSpace.Linear)
+            {
+                ldr.r = Mathf.Pow(ldr.r, 1.0f / 2.2f);
+                ldr.g = Mathf.Pow(ldr.g, 1.0f / 2.2f);
+                ldr.b = Mathf.Pow(ldr.b, 1.0f / 2.2f);
+            }
+
+            ldrPixels[i] = ldr;
+        }
+
+        ldrTex.SetPixels(ldrPixels);
+        ldrTex.Apply();
+        return ldrTex;
+    }
+
+    /// <summary>
+    /// Encode texture to file format (PNG, PNG+ToneMapping, or EXR)
+    /// </summary>
+    private byte[] EncodeTexture(Texture2D tex, bool useEXRFormat, bool applyToneMapping, float exposure)
     {
         if (useEXRFormat)
         {
             // EXR format: 32-bit float, lossless, preserves HDR data
             return tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
         }
+        else if (applyToneMapping)
+        {
+            // PNG with tone mapping: HDR -> LDR conversion
+            Texture2D ldrTex = ApplyToneMapping(tex, exposure);
+            byte[] pngData = ldrTex.EncodeToPNG();
+            DestroyImmediate(ldrTex);
+            return pngData;
+        }
         else
         {
-            // PNG format: 8-bit, lossy for HDR data
+            // PNG format: Direct 8-bit conversion
             return tex.EncodeToPNG();
         }
     }
