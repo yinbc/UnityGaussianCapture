@@ -311,7 +311,9 @@ public class CameraCaptureEditor : EditorWindow
             imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
             imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
 
-            RenderTexture rt = new RenderTexture(w, h, 32, RenderTextureFormat.ARGBFloat);
+            // Use ARGBFloat for EXR (linear, HDR), Default for PNG (sRGB, prevents dark images)
+            RenderTextureFormat rtFormat = imageFormat == "exr" ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
 
             int imageId = 1;
@@ -425,7 +427,7 @@ public class CameraCaptureEditor : EditorWindow
 
 
 
-                        rt = new RenderTexture(w, h, 32, RenderTextureFormat.ARGBFloat);
+                        rt = new RenderTexture(w, h, 32, rtFormat);
                         tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
 
                         yield return null;
@@ -550,7 +552,9 @@ public class CameraCaptureEditor : EditorWindow
             imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
             imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
 
-            RenderTexture rt = new RenderTexture(w, h, 32, RenderTextureFormat.ARGBFloat);
+            // Use ARGBFloat for EXR (linear, HDR), Default for PNG (sRGB, prevents dark images)
+            RenderTextureFormat rtFormat = imageFormat == "exr" ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
 
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
 
@@ -701,7 +705,7 @@ public class CameraCaptureEditor : EditorWindow
 
 
 
-                                rt = new RenderTexture(w, h, 32, RenderTextureFormat.ARGBFloat);
+                                rt = new RenderTexture(w, h, 32, rtFormat);
                                 tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
 
                                 yield return null;
