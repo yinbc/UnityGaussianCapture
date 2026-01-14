@@ -430,6 +430,10 @@ public class CameraCaptureEditor : EditorWindow
             LightingBackup lightingBackup = BackupLightingSettings();
             EnhanceLightingForCapture();
 
+            // Backup camera settings to preserve original configuration
+            CameraClearFlags originalClearFlags = cameraToUse.clearFlags;
+            Color originalBackgroundColor = cameraToUse.backgroundColor;
+
             foreach (SkinnedMeshRenderer r in GameObject.FindObjectsOfType<SkinnedMeshRenderer>())
             {
                 if (!r.GetComponent<MeshCollider>())
@@ -476,9 +480,8 @@ public class CameraCaptureEditor : EditorWindow
                     string imageName = $"view_{imageId:D3}.png";
                     string imagePath = Path.Combine(folderPath, imageName);
 
-                    cameraToUse.clearFlags = CameraClearFlags.SolidColor;
-                    cameraToUse.backgroundColor = new Color(0, 0, 0, 0);
-
+                    // Temporarily set camera to use original settings for rendering
+                    // This preserves the Game view appearance
                     cameraToUse.targetTexture = rt;
                     cameraToUse.Render();
                     RenderTexture.active = rt;
@@ -540,7 +543,9 @@ public class CameraCaptureEditor : EditorWindow
             }
             writer3D.Close();
 
-            // Restore original lighting settings
+            // Restore original camera and lighting settings
+            cameraToUse.clearFlags = originalClearFlags;
+            cameraToUse.backgroundColor = originalBackgroundColor;
             RestoreLightingSettings(lightingBackup);
 
             cameraToUse.targetTexture = null;
@@ -682,6 +687,10 @@ public class CameraCaptureEditor : EditorWindow
             LightingBackup lightingBackup = BackupLightingSettings();
             EnhanceLightingForCapture();
 
+            // Backup camera settings to preserve original configuration
+            CameraClearFlags originalClearFlags = cameraToUse.clearFlags;
+            Color originalBackgroundColor = cameraToUse.backgroundColor;
+
             for (int x = 0; x < subdivX; x++)
             {
                 for (int y = 0; y < subdivY; y++)
@@ -752,10 +761,8 @@ public class CameraCaptureEditor : EditorWindow
                                 continue;
                             }
 
-
-                            cameraToUse.clearFlags = CameraClearFlags.SolidColor;
-                            cameraToUse.backgroundColor = new Color(0, 0, 0, 0); 
-
+                            // Temporarily set camera to use original settings for rendering
+                            // This preserves the Game view appearance
                             cameraToUse.targetTexture = rt;
                             cameraToUse.Render();
                             RenderTexture.active = rt;
@@ -827,7 +834,9 @@ public class CameraCaptureEditor : EditorWindow
 
             writer3D.Close();
 
-            // Restore original lighting settings
+            // Restore original camera and lighting settings
+            cameraToUse.clearFlags = originalClearFlags;
+            cameraToUse.backgroundColor = originalBackgroundColor;
             RestoreLightingSettings(lightingBackup);
 
             cameraToUse.targetTexture = null;
