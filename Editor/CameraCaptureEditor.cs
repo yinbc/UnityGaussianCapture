@@ -43,6 +43,9 @@ public class CameraCaptureEditor : EditorWindow
     private int imageFormatIndex = 0;
     private string imageFormat = "png";
 
+    private bool useToneMapping = false;
+    private float exposure = 1.0f;
+
     int w = 1920;
     int h = 1080;
     int rays = 500;
@@ -64,6 +67,15 @@ public class CameraCaptureEditor : EditorWindow
         GUILayout.Label("Image Format", EditorStyles.boldLabel);
         imageFormatIndex = GUILayout.Toolbar(imageFormatIndex, new string[] { "PNG", "EXR" });
         imageFormat = imageFormatIndex == 0 ? "png" : "exr";
+
+        if (imageFormat == "png")
+        {
+            useToneMapping = EditorGUILayout.Toggle("Use Tone Mapping (HDR)", useToneMapping);
+            if (useToneMapping)
+            {
+                exposure = EditorGUILayout.Slider("Exposure", exposure, 0.1f, 5.0f);
+            }
+        }
 
         GUILayout.Space(10);
         rays = EditorGUILayout.IntField("PointCloud/View", rays);
@@ -311,8 +323,8 @@ public class CameraCaptureEditor : EditorWindow
             imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
             imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
 
-            // Use ARGBFloat for EXR (linear, HDR), Default for PNG (sRGB, prevents dark images)
-            RenderTextureFormat rtFormat = imageFormat == "exr" ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            // Use ARGBFloat for EXR or tone mapping (linear, HDR), Default for PNG (sRGB, prevents dark images)
+            RenderTextureFormat rtFormat = (imageFormat == "exr" || useToneMapping) ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
             RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
 
@@ -383,7 +395,21 @@ public class CameraCaptureEditor : EditorWindow
                     tex.Apply();
                     CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
 
-                    byte[] imageData = imageFormat == "exr" ? tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP) : tex.EncodeToPNG();
+                    byte[] imageData;
+                    if (imageFormat == "exr")
+                    {
+                        imageData = tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+                    }
+                    else if (useToneMapping)
+                    {
+                        Texture2D ldrTex = ApplyToneMapping(tex, exposure);
+                        imageData = ldrTex.EncodeToPNG();
+                        DestroyImmediate(ldrTex);
+                    }
+                    else
+                    {
+                        imageData = tex.EncodeToPNG();
+                    }
                     File.WriteAllBytes(imagePath, imageData);
 
                     imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
@@ -552,8 +578,8 @@ public class CameraCaptureEditor : EditorWindow
             imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
             imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
 
-            // Use ARGBFloat for EXR (linear, HDR), Default for PNG (sRGB, prevents dark images)
-            RenderTextureFormat rtFormat = imageFormat == "exr" ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            // Use ARGBFloat for EXR or tone mapping (linear, HDR), Default for PNG (sRGB, prevents dark images)
+            RenderTextureFormat rtFormat = (imageFormat == "exr" || useToneMapping) ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
             RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
 
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
@@ -657,7 +683,21 @@ public class CameraCaptureEditor : EditorWindow
                             tex.Apply();
                             CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
 
-                            byte[] imageData = imageFormat == "exr" ? tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP) : tex.EncodeToPNG();
+                            byte[] imageData;
+                            if (imageFormat == "exr")
+                            {
+                                imageData = tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+                            }
+                            else if (useToneMapping)
+                            {
+                                Texture2D ldrTex = ApplyToneMapping(tex, exposure);
+                                imageData = ldrTex.EncodeToPNG();
+                                DestroyImmediate(ldrTex);
+                            }
+                            else
+                            {
+                                imageData = tex.EncodeToPNG();
+                            }
                             File.WriteAllBytes(imagePath, imageData);
                             imageData = null;
 
@@ -845,6 +885,36 @@ public class CameraCaptureEditor : EditorWindow
         }
     }
 }
+
+    // Apply Reinhard tone mapping with exposure control
+    private Texture2D ApplyToneMapping(Texture2D hdrTex, float exposureValue)
+    {
+        int width = hdrTex.width;
+        int height = hdrTex.height;
+
+        Texture2D ldrTex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        Color[] pixels = hdrTex.GetPixels();
+
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            Color hdr = pixels[i] * exposureValue;
+
+            // Reinhard tone mapping: L_out = L_in / (1 + L_in)
+            pixels[i].r = hdr.r / (1.0f + hdr.r);
+            pixels[i].g = hdr.g / (1.0f + hdr.g);
+            pixels[i].b = hdr.b / (1.0f + hdr.b);
+            pixels[i].a = hdr.a;
+
+            // Apply gamma correction for sRGB (gamma 2.2)
+            pixels[i].r = Mathf.Pow(pixels[i].r, 1.0f / 2.2f);
+            pixels[i].g = Mathf.Pow(pixels[i].g, 1.0f / 2.2f);
+            pixels[i].b = Mathf.Pow(pixels[i].b, 1.0f / 2.2f);
+        }
+
+        ldrTex.SetPixels(pixels);
+        ldrTex.Apply();
+        return ldrTex;
+    }
 
 
 }
