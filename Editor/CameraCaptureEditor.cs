@@ -530,7 +530,7 @@ public class CameraCaptureEditor : EditorWindow
             EditorApplication.isPaused = false;
 
     }
-    private IEnumerator WaitForPlayAndCapture(bool isDome)
+    private IEnumerator WaitForPlayAndCapture(int captureMode)
     {
         if (!EditorApplication.isPlaying)
         {
@@ -569,10 +569,19 @@ public class CameraCaptureEditor : EditorWindow
                 }
                 var window = GetWindow<CameraCaptureEditor>();
 
-                yield return window.StartCoroutine(
-                    isDome ? window.CaptureViewsAndExportColmap("/" + i + "/")
-                           : window.CaptureVolumeViewsAndExportColmap("/" + i + "/")
-                );
+                // captureMode: 0=Dome, 1=Volume, 2=Spherical
+                if (captureMode == 0)
+                {
+                    yield return window.StartCoroutine(window.CaptureViewsAndExportColmap("/" + i + "/"));
+                }
+                else if (captureMode == 1)
+                {
+                    yield return window.StartCoroutine(window.CaptureVolumeViewsAndExportColmap("/" + i + "/"));
+                }
+                else if (captureMode == 2)
+                {
+                    yield return window.StartCoroutine(window.CaptureFullSphereViewsAndExportColmap("/" + i + "/"));
+                }
             }
             EditorUtility.RevealInFinder(outputFolder);
 
@@ -1034,8 +1043,7 @@ public class CameraCaptureEditor : EditorWindow
         var window = GetWindow<CameraCaptureEditor>();
         if (isRuntime)
         {
-
-            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(false), window);
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(1), window);
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureVolumeViewsAndExportColmap(""), window);
@@ -1047,8 +1055,7 @@ public class CameraCaptureEditor : EditorWindow
         var window = GetWindow<CameraCaptureEditor>();
         if (isRuntime)
         {
-
-            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(true), window);
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(0), window);
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureViewsAndExportColmap(""), window);
@@ -1059,8 +1066,7 @@ public class CameraCaptureEditor : EditorWindow
         var window = GetWindow<CameraCaptureEditor>();
         if (isRuntime)
         {
-            // For now, we don't support runtime animation for spherical capture
-            Debug.LogWarning("Runtime animation is not yet supported for Spherical Capture");
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(2), window);
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureFullSphereViewsAndExportColmap(""), window);
