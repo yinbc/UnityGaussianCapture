@@ -92,10 +92,7 @@ public class CameraDomeGizmo : MonoBehaviour
                 Gizmos.DrawLine(point, point + direction * 0.5f);
             }
         }
-
-
     }
-}
 
     private List<Vector3> GenerateCustomSphericalDirections()
     {
