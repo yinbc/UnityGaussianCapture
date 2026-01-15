@@ -17,6 +17,12 @@ public class CameraDomeGizmo : MonoBehaviour
     public int subdivX = 2, subdivY = 2, subdivZ = 2;
     public bool showGrid = true;
     public float currentTime = 0f;
+
+    // Spherical capture parameters
+    public Transform sphericalTarget;
+    public int numSpherePoints = 100;
+    public float sphereRadius = 5f;
+
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.cyan;
@@ -45,7 +51,7 @@ public class CameraDomeGizmo : MonoBehaviour
                 }
             }
         }
-        else
+        else if (mode == 1)
         {
             Vector3 step = new Vector3(volumeSize.x / subdivX, volumeSize.y / subdivY, volumeSize.z / subdivZ);
 
@@ -66,7 +72,26 @@ public class CameraDomeGizmo : MonoBehaviour
                 Gizmos.DrawSphere(center, gizmoSize);
                 Gizmos.DrawLine(center, center + dir.normalized * 0.2f);
             }
-        
+        }
+        else if (mode == 2)
+        {
+            // Spherical capture mode
+            if (sphericalTarget == null) return;
+
+            List<Vector3> spherePoints = GenerateFibonacciSpherePoints(numSpherePoints, sphereRadius, sphericalTarget.position);
+
+            Gizmos.color = Color.yellow;
+            // Draw sphere wireframe
+            Gizmos.DrawWireSphere(sphericalTarget.position, sphereRadius);
+
+            Gizmos.color = Color.cyan;
+            foreach (Vector3 point in spherePoints)
+            {
+                Gizmos.DrawSphere(point, gizmoSize);
+                Vector3 direction = (sphericalTarget.position - point).normalized;
+                Gizmos.DrawLine(point, point + direction * 0.5f);
+            }
+        }
 
 
     }
@@ -97,9 +122,32 @@ public class CameraDomeGizmo : MonoBehaviour
             directions.Add(rot * Vector3.forward);
         }
 
-        
+
 
         return directions;
+    }
+
+    // Generate points uniformly distributed on a sphere using Fibonacci lattice
+    private List<Vector3> GenerateFibonacciSpherePoints(int numPoints, float radius, Vector3 center)
+    {
+        List<Vector3> points = new List<Vector3>();
+        float phi = Mathf.PI * (3.0f - Mathf.Sqrt(5.0f)); // Golden angle in radians
+
+        for (int i = 0; i < numPoints; i++)
+        {
+            float y = 1.0f - (i / (float)(numPoints - 1)) * 2.0f; // y goes from 1 to -1
+            float radiusAtY = Mathf.Sqrt(1.0f - y * y); // radius at y
+
+            float theta = phi * i; // golden angle increment
+
+            float x = Mathf.Cos(theta) * radiusAtY;
+            float z = Mathf.Sin(theta) * radiusAtY;
+
+            Vector3 point = center + new Vector3(x, y, z) * radius;
+            points.Add(point);
+        }
+
+        return points;
     }
 
     private void DrawSubdivisionGrid()

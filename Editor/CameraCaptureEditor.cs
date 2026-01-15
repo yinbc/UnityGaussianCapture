@@ -46,6 +46,11 @@ public class CameraCaptureEditor : EditorWindow
     private bool useToneMapping = false;
     private float exposure = 1.0f;
 
+    // Spherical Capture settings
+    private Transform sphericalTarget;
+    private int numSpherePoints = 100;
+    private float sphereRadius = 5f;
+
     int w = 1920;
     int h = 1080;
     int rays = 500;
@@ -116,13 +121,15 @@ public class CameraCaptureEditor : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         GUILayout.Space(10);
-        tabIndex = GUILayout.Toolbar(tabIndex, new string[] { "Dome Capture", "Volume Capture" });
-      
+        tabIndex = GUILayout.Toolbar(tabIndex, new string[] { "Dome Capture", "Volume Capture", "Spherical Capture" });
+
 
         if (tabIndex == 0)
             DrawSphericalCaptureUI();
-        else
+        else if (tabIndex == 1)
             DrawVolumeCaptureUI();
+        else
+            DrawFullSphereCaptureUI();
 
 
         GUILayout.Space(20);
@@ -235,6 +242,11 @@ public class CameraCaptureEditor : EditorWindow
             gizmoViewer.GetComponent<CameraDomeGizmo>().subdivZ = subdivZ;
             gizmoViewer.GetComponent<CameraDomeGizmo>().showGrid = ShowGrid;
 
+            // Spherical capture parameters
+            gizmoViewer.GetComponent<CameraDomeGizmo>().sphericalTarget = sphericalTarget;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().numSpherePoints = numSpherePoints;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().sphereRadius = sphereRadius;
+
         }
     }
 
@@ -287,6 +299,28 @@ public class CameraCaptureEditor : EditorWindow
                 }
 
                 StartCaptureVolume(runtimeAnim);
+            }
+    }
+
+    private void DrawFullSphereCaptureUI()
+    {
+        GUILayout.Label("Spherical Capture Settings", EditorStyles.boldLabel);
+
+        sphericalTarget = (Transform)EditorGUILayout.ObjectField("Target", sphericalTarget, typeof(Transform), true);
+        numSpherePoints = EditorGUILayout.IntField("Number of Points", numSpherePoints);
+        sphereRadius = EditorGUILayout.FloatField("Radius", sphereRadius);
+
+        GUILayout.Space(10);
+        if (!isRunning)
+            if (GUILayout.Button("Capture and Export COLMAP"))
+            {
+                if (cameraToUse == null || sphericalTarget == null || string.IsNullOrEmpty(outputFolder))
+                {
+                    Debug.LogError("Please assign a camera, target and an output folder.");
+                    return;
+                }
+
+                StartCaptureFullSphere(runtimeAnim);
             }
     }
 
@@ -789,6 +823,193 @@ public class CameraCaptureEditor : EditorWindow
             EditorApplication.isPaused = false;
 
     }
+
+    public IEnumerator CaptureFullSphereViewsAndExportColmap(string outAdd)
+    {
+        isRunning = true;
+
+        string folderPath = outputFolder + outAdd;
+        Directory.CreateDirectory(folderPath);
+
+        // === cameras.txt ===
+        string camerasTxt = Path.Combine(folderPath, "cameras.txt");
+
+        float fov = cameraToUse.fieldOfView;
+        float fy = 0.5f * h / Mathf.Tan(0.5f * fov * Mathf.Deg2Rad);
+        float fx = fy;
+
+        float cx = w / 2f;
+        float cy = h / 2f;
+
+        using (StreamWriter camWriter = new StreamWriter(camerasTxt))
+        {
+            camWriter.WriteLine("# Camera list with one line of data per camera:");
+            camWriter.WriteLine("#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]");
+            camWriter.WriteLine($"1 PINHOLE {w} {h} {fx.ToString(CultureInfo.InvariantCulture)} {fy.ToString(CultureInfo.InvariantCulture)} {cx} {cy}");
+        }
+
+        // === images.txt ===
+        string imagesTxt = Path.Combine(folderPath, "images.txt");
+        using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
+        {
+            imgWriter.WriteLine("# Image list with two lines per image:");
+            imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
+            imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
+
+            // Use ARGBFloat for EXR or tone mapping (linear, HDR), Default for PNG (sRGB, prevents dark images)
+            RenderTextureFormat rtFormat = (imageFormat == "exr" || useToneMapping) ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+
+            int imageId = 1;
+            int batchSize = 40;
+            int batchCounter = 0;
+
+            StreamWriter writer3D = new StreamWriter(Path.Combine(folderPath, "points3D.txt"));
+            writer3D.WriteLine("# 3D point list with one line of data per point:");
+            writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
+            int pointId = 1;
+
+            // Generate Fibonacci sphere points
+            List<Vector3> spherePoints = GenerateFibonacciSpherePoints(numSpherePoints, sphereRadius, sphericalTarget.position);
+
+            int totalImages = spherePoints.Count;
+            int currentImage = 0;
+
+            // Bake skinned meshes for collision detection
+            foreach (SkinnedMeshRenderer r in GameObject.FindObjectsOfType<SkinnedMeshRenderer>())
+            {
+                if (!r.GetComponent<MeshCollider>())
+                {
+                    r.gameObject.AddComponent<MeshCollider>();
+                }
+
+                Mesh bakedMesh = new Mesh();
+                r.BakeMesh(bakedMesh);
+
+                r.GetComponent<MeshCollider>().sharedMesh = null;
+                r.GetComponent<MeshCollider>().sharedMesh = bakedMesh;
+            }
+
+            foreach (Vector3 position in spherePoints)
+            {
+                float progress = (float)currentImage / totalImages;
+                EditorUtility.DisplayProgressBar("Capture Full Sphere", $"Image {currentImage + 1} / {totalImages}", progress);
+
+                cameraToUse.transform.position = position;
+                cameraToUse.transform.LookAt(sphericalTarget);
+
+                Matrix4x4 worldToCamera = cameraToUse.worldToCameraMatrix;
+                Matrix4x4 unityToColmap = Matrix4x4.Scale(new Vector3(1, -1, -1));
+                Matrix4x4 colmapMatrix = unityToColmap * worldToCamera;
+
+                Matrix4x4 R = colmapMatrix;
+                R.SetColumn(3, new Vector4(0, 0, 0, 1));
+                Quaternion q = QuaternionFromMatrix(R);
+                Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
+
+                string imageName = $"sphere_{imageId:D4}.{imageFormat}";
+                string imagePath = Path.Combine(folderPath, imageName);
+
+                cameraToUse.clearFlags = CameraClearFlags.SolidColor;
+                cameraToUse.backgroundColor = new Color(0, 0, 0, 0);
+
+                cameraToUse.targetTexture = rt;
+                cameraToUse.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
+
+                byte[] imageData;
+                if (imageFormat == "exr")
+                {
+                    imageData = tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+                }
+                else if (useToneMapping)
+                {
+                    Texture2D ldrTex = ApplyToneMapping(tex, exposure);
+                    imageData = ldrTex.EncodeToPNG();
+                    DestroyImmediate(ldrTex);
+                }
+                else
+                {
+                    imageData = tex.EncodeToPNG();
+                }
+                File.WriteAllBytes(imagePath, imageData);
+
+                imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
+                imgWriter.WriteLine();
+
+                imageId++;
+                batchCounter++;
+                currentImage++;
+
+                if (cancel)
+                {
+                    Debug.LogWarning("Capture canceled.");
+                    EditorUtility.ClearProgressBar();
+                    cancel = false;
+                    isRunning = false;
+
+                    yield break;
+                }
+
+                if (batchCounter >= batchSize)
+                {
+                    batchCounter = 0;
+
+                    cameraToUse.targetTexture = null;
+                    RenderTexture.active = null;
+                    GL.Clear(true, true, Color.clear);
+
+                    tex = null;
+                    rt.Release();
+                    rt = null;
+
+                    DestroyImmediate(rt);
+                    DestroyImmediate(tex);
+
+                    EditorUtility.UnloadUnusedAssetsImmediate();
+                    AssetDatabase.SaveAssets();
+                    EditorApplication.QueuePlayerLoopUpdate();
+
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+
+                    rt = new RenderTexture(w, h, 32, rtFormat);
+                    tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+
+                    yield return null;
+                }
+            }
+
+            writer3D.Close();
+
+            cameraToUse.targetTexture = null;
+            RenderTexture.active = null;
+            DestroyImmediate(rt);
+            DestroyImmediate(tex);
+        }
+
+        Debug.Log("Spherical Capture + COLMAP files finished!");
+        AssetDatabase.Refresh();
+        EditorUtility.ClearProgressBar();
+
+        if (!runtimeAnim)
+            EditorUtility.RevealInFinder(folderPath);
+        isRunning = false;
+
+        if (!runtimeAnim && TrainPostShot)
+        {
+            RunPostshotBatch();
+        }
+
+        yield return new WaitForEndOfFrame();
+        if (EditorApplication.isPaused == true)
+            EditorApplication.isPaused = false;
+    }
+
     private static void StartCaptureVolume(bool isRuntime)
     {
         var window = GetWindow<CameraCaptureEditor>();
@@ -812,6 +1033,18 @@ public class CameraCaptureEditor : EditorWindow
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureViewsAndExportColmap(""), window);
+    }
+
+    private static void StartCaptureFullSphere(bool isRuntime)
+    {
+        var window = GetWindow<CameraCaptureEditor>();
+        if (isRuntime)
+        {
+            // For now, we don't support runtime animation for spherical capture
+            Debug.LogWarning("Runtime animation is not yet supported for Spherical Capture");
+        }
+        else
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureFullSphereViewsAndExportColmap(""), window);
     }
 
 
@@ -846,6 +1079,30 @@ public class CameraCaptureEditor : EditorWindow
 
         return directions;
     }
+
+    // Generate points uniformly distributed on a sphere using Fibonacci lattice
+    private List<Vector3> GenerateFibonacciSpherePoints(int numPoints, float radius, Vector3 center)
+    {
+        List<Vector3> points = new List<Vector3>();
+        float phi = Mathf.PI * (3.0f - Mathf.Sqrt(5.0f)); // Golden angle in radians
+
+        for (int i = 0; i < numPoints; i++)
+        {
+            float y = 1.0f - (i / (float)(numPoints - 1)) * 2.0f; // y goes from 1 to -1
+            float radiusAtY = Mathf.Sqrt(1.0f - y * y); // radius at y
+
+            float theta = phi * i; // golden angle increment
+
+            float x = Mathf.Cos(theta) * radiusAtY;
+            float z = Mathf.Sin(theta) * radiusAtY;
+
+            Vector3 point = center + new Vector3(x, y, z) * radius;
+            points.Add(point);
+        }
+
+        return points;
+    }
+
     void CapturePointCloudFromCamera(Camera cam, Texture2D tex, int rayCount, StreamWriter writer, int imageId, ref int pointId)
 {
     int width = tex.width;
