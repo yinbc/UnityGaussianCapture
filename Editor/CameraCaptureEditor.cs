@@ -330,8 +330,15 @@ public class CameraCaptureEditor : EditorWindow
 
         string folderPath = outputFolder+outAdd;
         Directory.CreateDirectory(folderPath);
+
+        // Create COLMAP standard directory structure
+        string imagesFolder = Path.Combine(folderPath, "images");
+        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        Directory.CreateDirectory(imagesFolder);
+        Directory.CreateDirectory(sparseFolder);
+
         // === cameras.txt ===
-        string camerasTxt = Path.Combine(folderPath, "cameras.txt");
+        string camerasTxt = Path.Combine(sparseFolder, "cameras.txt");
 
 
         float fov = cameraToUse.fieldOfView;
@@ -350,7 +357,7 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         // === images.txt ===
-        string imagesTxt = Path.Combine(folderPath, "images.txt");
+        string imagesTxt = Path.Combine(sparseFolder, "images.txt");
         using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
         {
             imgWriter.WriteLine("# Image list with two lines per image:");
@@ -367,7 +374,7 @@ public class CameraCaptureEditor : EditorWindow
             int batchCounter = 0;
             int totalImages = viewsPerRing*numRings;
             int currentImage = 0;
-            StreamWriter writer3D = new StreamWriter(Path.Combine(folderPath, "points3D.txt"));
+            StreamWriter writer3D = new StreamWriter(Path.Combine(sparseFolder, "points3D.txt"));
             writer3D.WriteLine("# 3D point list with one line of data per point:");
             writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
             int pointId = 1;
@@ -417,7 +424,7 @@ public class CameraCaptureEditor : EditorWindow
                     Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
                     string imageName = $"view_{imageId:D3}.{imageFormat}";
-                    string imagePath = Path.Combine(folderPath, imageName);
+                    string imagePath = Path.Combine(imagesFolder, imageName);
 
                     cameraToUse.clearFlags = CameraClearFlags.SolidColor;
                     cameraToUse.backgroundColor = new Color(0, 0, 0, 0);
@@ -585,8 +592,14 @@ public class CameraCaptureEditor : EditorWindow
         string folderPath = outputFolder + outAdd;
         Directory.CreateDirectory(folderPath);
 
+        // Create COLMAP standard directory structure
+        string imagesFolder = Path.Combine(folderPath, "images");
+        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        Directory.CreateDirectory(imagesFolder);
+        Directory.CreateDirectory(sparseFolder);
+
         // === cameras.txt ===
-        string camerasTxt = Path.Combine(folderPath, "cameras.txt");
+        string camerasTxt = Path.Combine(sparseFolder, "cameras.txt");
 
 
         float fov = cameraToUse.fieldOfView;
@@ -605,7 +618,7 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         // === images.txt ===
-        string imagesTxt = Path.Combine(folderPath, "images.txt");
+        string imagesTxt = Path.Combine(sparseFolder, "images.txt");
         using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
         {
             imgWriter.WriteLine("# Image list with two lines per image:");
@@ -630,7 +643,7 @@ public class CameraCaptureEditor : EditorWindow
             int batchCounter = 0;
             int imagesSkipped = 0;
 
-            StreamWriter writer3D = new StreamWriter(Path.Combine(folderPath, "points3D.txt"));
+            StreamWriter writer3D = new StreamWriter(Path.Combine(sparseFolder, "points3D.txt"));
             writer3D.WriteLine("# 3D point list with one line of data per point:");
             writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
             int pointId = 1;
@@ -668,7 +681,7 @@ public class CameraCaptureEditor : EditorWindow
                             Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
                             string imageName = $"vol_{imageId:D4}.{imageFormat}";
-                            string imagePath = Path.Combine(folderPath, imageName);
+                            string imagePath = Path.Combine(imagesFolder, imageName);
 
 
                             Plane[] planes = GeometryUtility.CalculateFrustumPlanes(cameraToUse);
@@ -831,8 +844,14 @@ public class CameraCaptureEditor : EditorWindow
         string folderPath = outputFolder + outAdd;
         Directory.CreateDirectory(folderPath);
 
+        // Create COLMAP standard directory structure
+        string imagesFolder = Path.Combine(folderPath, "images");
+        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        Directory.CreateDirectory(imagesFolder);
+        Directory.CreateDirectory(sparseFolder);
+
         // === cameras.txt ===
-        string camerasTxt = Path.Combine(folderPath, "cameras.txt");
+        string camerasTxt = Path.Combine(sparseFolder, "cameras.txt");
 
         float fov = cameraToUse.fieldOfView;
         float fy = 0.5f * h / Mathf.Tan(0.5f * fov * Mathf.Deg2Rad);
@@ -849,7 +868,7 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         // === images.txt ===
-        string imagesTxt = Path.Combine(folderPath, "images.txt");
+        string imagesTxt = Path.Combine(sparseFolder, "images.txt");
         using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
         {
             imgWriter.WriteLine("# Image list with two lines per image:");
@@ -865,7 +884,7 @@ public class CameraCaptureEditor : EditorWindow
             int batchSize = 40;
             int batchCounter = 0;
 
-            StreamWriter writer3D = new StreamWriter(Path.Combine(folderPath, "points3D.txt"));
+            StreamWriter writer3D = new StreamWriter(Path.Combine(sparseFolder, "points3D.txt"));
             writer3D.WriteLine("# 3D point list with one line of data per point:");
             writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
             int pointId = 1;
@@ -909,7 +928,7 @@ public class CameraCaptureEditor : EditorWindow
                 Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
 
                 string imageName = $"sphere_{imageId:D4}.{imageFormat}";
-                string imagePath = Path.Combine(folderPath, imageName);
+                string imagePath = Path.Combine(imagesFolder, imageName);
 
                 cameraToUse.clearFlags = CameraClearFlags.SolidColor;
                 cameraToUse.backgroundColor = new Color(0, 0, 0, 0);
