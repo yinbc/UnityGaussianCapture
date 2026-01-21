@@ -1,18 +1,19 @@
 #include "GaussianCaptureEditorWidget.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Layout/SScrollBox.h"
-#include "Widgets/Layout/SUniformGridPanel.h"
-#include "EditorStyleSet.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Styling/AppStyle.h"
+#include "Styling/CoreStyle.h"
 #include "Editor.h"
 #include "EngineUtils.h"
 #include "GaussianCaptureSubsystem.h"
 #include "Misc/Paths.h"
 #include "Misc/MessageDialog.h"
 #include "Selection.h"
+#include "EditorViewportClient.h"
+#include "LevelEditorViewport.h"
 
 #define LOCTEXT_NAMESPACE "SGaussianCaptureEditorWidget"
 
@@ -54,7 +55,7 @@ void SGaussianCaptureEditorWidget::Construct(const FArguments& InArgs)
 			.Padding(0, 0, 0, 10)
 			[
 				SNew(SBorder)
-				.BorderImage(FEditorStyle::GetBrush("Menu.Separator"))
+				.BorderImage(FAppStyle::GetBrush("Menu.Separator"))
 				.Padding(0)
 			]
 
@@ -107,7 +108,7 @@ void SGaussianCaptureEditorWidget::Construct(const FArguments& InArgs)
 			.Padding(0, 0, 0, 10)
 			[
 				SNew(SBorder)
-				.BorderImage(FEditorStyle::GetBrush("Menu.Separator"))
+				.BorderImage(FAppStyle::GetBrush("Menu.Separator"))
 				.Padding(0)
 			]
 
@@ -150,7 +151,7 @@ void SGaussianCaptureEditorWidget::Construct(const FArguments& InArgs)
 			.Padding(0, 10, 0, 10)
 			[
 				SNew(SBorder)
-				.BorderImage(FEditorStyle::GetBrush("Menu.Separator"))
+				.BorderImage(FAppStyle::GetBrush("Menu.Separator"))
 				.Padding(0)
 			]
 
@@ -189,7 +190,7 @@ void SGaussianCaptureEditorWidget::Construct(const FArguments& InArgs)
 			.Padding(0, 0, 0, 10)
 			[
 				SNew(SBorder)
-				.BorderImage(FEditorStyle::GetBrush("Menu.Separator"))
+				.BorderImage(FAppStyle::GetBrush("Menu.Separator"))
 				.Padding(0)
 			]
 
@@ -222,7 +223,7 @@ void SGaussianCaptureEditorWidget::Construct(const FArguments& InArgs)
 			.Padding(0, 20, 0, 0)
 			[
 				SNew(SBorder)
-				.BorderImage(FEditorStyle::GetBrush("ToolPanel.GroupBorder"))
+				.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
 				.Padding(10)
 				[
 					SNew(SVerticalBox)

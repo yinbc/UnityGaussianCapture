@@ -6,9 +6,7 @@
 #include "GaussianCaptureActor.h"
 
 class SEditableTextBox;
-class SCheckBox;
-class SSpinBox;
-class SComboBox;
+class STextBlock;
 
 /**
  * Main editor widget for Gaussian Capture

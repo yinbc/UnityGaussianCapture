@@ -32,7 +32,7 @@ public class UnrealGaussianCaptureEditor : ModuleRules
 				"Slate",
 				"SlateCore",
 				"UnrealEd",
-				"EditorStyle",
+				"ToolMenus",
 				"EditorWidgets",
 				"PropertyEditor",
 				"LevelEditor",
@@ -41,7 +41,9 @@ public class UnrealGaussianCaptureEditor : ModuleRules
 				"RenderCore",
 				"RHI",
 				"Json",
-				"JsonUtilities"
+				"JsonUtilities",
+				"EditorFramework",
+				"Projects"
 			}
 		);
 

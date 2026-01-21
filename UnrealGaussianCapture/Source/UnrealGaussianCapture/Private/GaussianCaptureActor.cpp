@@ -1,5 +1,6 @@
 #include "GaussianCaptureActor.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/World.h"
 
 AGaussianCaptureActor::AGaussianCaptureActor()
 {
@@ -41,7 +42,8 @@ void AGaussianCaptureActor::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 #if WITH_EDITOR
-	if (GEngine && GEngine->GetWorldFromContextObjectChecked(this)->WorldType == EWorldType::Editor)
+	UWorld* World = GetWorld();
+	if (World && World->WorldType == EWorldType::Editor)
 	{
 		DrawDebugVisualization();
 	}
