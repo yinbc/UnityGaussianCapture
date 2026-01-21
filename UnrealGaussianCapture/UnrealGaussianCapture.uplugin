@@ -1,0 +1,29 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Unreal Gaussian Capture",
+	"Description": "Capture multi-view scenes for Gaussian Splatting neural rendering with COLMAP export support",
+	"Category": "Rendering",
+	"CreatedBy": "AI Assistant",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "UnrealGaussianCapture",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "UnrealGaussianCaptureEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
