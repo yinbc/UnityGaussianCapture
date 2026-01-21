@@ -1,6 +1,7 @@
 #include "GaussianCaptureActor.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
+#include "Components/PrimitiveComponent.h"
 
 AGaussianCaptureActor::AGaussianCaptureActor()
 {
@@ -8,7 +9,9 @@ AGaussianCaptureActor::AGaussianCaptureActor()
 
 	// Default values
 	CaptureMode = ECaptureMode::Dome;
+	TargetActor = nullptr;
 	TargetLocation = FVector::ZeroVector;
+	bUseActorBoundsCenter = true;
 
 	// Dome defaults
 	DomeRings = 3;
@@ -79,12 +82,21 @@ void AGaussianCaptureActor::DrawDebugVisualization() const
 	// Draw target or volume bounds
 	if (CaptureMode == ECaptureMode::Dome)
 	{
+		FVector EffectiveTarget = GetEffectiveTargetLocation();
+
 		// Draw target sphere
-		DrawDebugSphere(GetWorld(), TargetLocation, 20.0f, 12, FColor::Red, false, -1.0f, 0, 3.0f);
+		DrawDebugSphere(GetWorld(), EffectiveTarget, 20.0f, 12, FColor::Red, false, -1.0f, 0, 3.0f);
 
 		// Draw dome ring
-		DrawDebugCircle(GetWorld(), TargetLocation, DomeRadius, 32, FColor::Cyan, false, -1.0f, 0, 2.0f,
+		DrawDebugCircle(GetWorld(), EffectiveTarget, DomeRadius, 32, FColor::Cyan, false, -1.0f, 0, 2.0f,
 			FVector(0, 1, 0), FVector(0, 0, 1), false);
+
+		// If target actor is set, draw a line connecting it
+		if (TargetActor)
+		{
+			DrawDebugLine(GetWorld(), EffectiveTarget, TargetActor->GetActorLocation(),
+				FColor::Magenta, false, -1.0f, 0, 2.0f);
+		}
 	}
 	else if (CaptureMode == ECaptureMode::Volume)
 	{
@@ -93,6 +105,29 @@ void AGaussianCaptureActor::DrawDebugVisualization() const
 	}
 }
 #endif
+
+FVector AGaussianCaptureActor::GetEffectiveTargetLocation() const
+{
+	// If a target actor is specified, use its location
+	if (TargetActor)
+	{
+		if (bUseActorBoundsCenter)
+		{
+			// Get the bounding box center
+			FBox BoundingBox = TargetActor->GetComponentsBoundingBox(true);
+			if (BoundingBox.IsValid)
+			{
+				return BoundingBox.GetCenter();
+			}
+		}
+
+		// Fall back to actor location
+		return TargetActor->GetActorLocation();
+	}
+
+	// Otherwise use the manual target location
+	return TargetLocation;
+}
 
 TArray<FCameraPosition> AGaussianCaptureActor::GetCameraPositions() const
 {
@@ -109,6 +144,7 @@ TArray<FCameraPosition> AGaussianCaptureActor::GetCameraPositions() const
 TArray<FCameraPosition> AGaussianCaptureActor::GenerateDomePositions() const
 {
 	TArray<FCameraPosition> Positions;
+	FVector EffectiveTarget = GetEffectiveTargetLocation();
 
 	for (int32 Ring = 0; Ring < DomeRings; ++Ring)
 	{
@@ -128,12 +164,12 @@ TArray<FCameraPosition> AGaussianCaptureActor::GenerateDomePositions() const
 
 			// Calculate camera position
 			FVector CameraPos;
-			CameraPos.X = TargetLocation.X + RingRadius * FMath::Cos(AzimuthRad);
-			CameraPos.Y = TargetLocation.Y + RingRadius * FMath::Sin(AzimuthRad);
-			CameraPos.Z = TargetLocation.Z + RingHeight;
+			CameraPos.X = EffectiveTarget.X + RingRadius * FMath::Cos(AzimuthRad);
+			CameraPos.Y = EffectiveTarget.Y + RingRadius * FMath::Sin(AzimuthRad);
+			CameraPos.Z = EffectiveTarget.Z + RingHeight;
 
 			// Calculate rotation to look at target
-			FVector Direction = (TargetLocation - CameraPos).GetSafeNormal();
+			FVector Direction = (EffectiveTarget - CameraPos).GetSafeNormal();
 			FRotator Rotation = Direction.Rotation();
 
 			Positions.Add(FCameraPosition(CameraPos, Rotation));

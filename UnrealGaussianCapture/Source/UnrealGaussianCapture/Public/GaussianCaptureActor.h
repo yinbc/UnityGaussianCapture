@@ -42,9 +42,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capture Settings")
 	ECaptureMode CaptureMode;
 
-	// Target location for dome mode (camera looks at this point)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capture Settings")
+	// Target actor for dome mode (cameras will look at this actor's location)
+	// If set, this will override TargetLocation
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capture Settings", meta = (DisplayName = "Target Actor (Optional)"))
+	AActor* TargetActor;
+
+	// Manual target location for dome mode (used if TargetActor is not set)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capture Settings", meta = (EditCondition = "TargetActor == nullptr", EditConditionHides))
 	FVector TargetLocation;
+
+	// Use the actor's bounding box center as target (only if TargetActor is set)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Capture Settings", meta = (EditCondition = "TargetActor != nullptr", EditConditionHides))
+	bool bUseActorBoundsCenter;
 
 	// === Dome Mode Settings ===
 
@@ -107,6 +116,10 @@ public:
 	float MaxRayDistance;
 
 	// === Functions ===
+
+	// Get the effective target location (from TargetActor if set, otherwise TargetLocation)
+	UFUNCTION(BlueprintCallable, Category = "Capture")
+	FVector GetEffectiveTargetLocation() const;
 
 	// Generate camera positions for dome mode
 	UFUNCTION(BlueprintCallable, Category = "Capture")

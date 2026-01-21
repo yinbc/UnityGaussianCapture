@@ -42,12 +42,23 @@ A powerful Unreal Engine plugin for capturing multi-view scene data for **Gaussi
 2. A `GaussianCaptureActor` will be spawned at your current viewport location
 3. Configure capture settings in the Details panel:
 
+#### Target Selection (Dome Mode)
+
+You have two ways to specify the target that cameras will look at:
+
+**Option A: Use Target Actor (Recommended)**
+- Drag and drop any actor from your scene into the **Target Actor** field
+- The capture will automatically use that actor's location
+- Enable **Use Actor Bounds Center** to target the center of the actor's bounding box (useful for large objects)
+
+**Option B: Manual Target Location**
+- If **Target Actor** is empty, manually set the **Target Location** coordinates (X, Y, Z)
+
 #### Dome Mode Settings
 - **Dome Rings**: Number of horizontal elevation levels (1-20)
 - **Views Per Ring**: Cameras per ring (3-36)
 - **Dome Radius**: Distance from target point (cm)
 - **Dome Height**: Vertical offset from target (cm)
-- **Target Location**: Point all cameras look at
 
 #### Volume Mode Settings
 - **Volume Center**: Center of capture volume

@@ -6,15 +6,35 @@ This document provides practical examples for using the Unreal Gaussian Capture 
 
 ### Setup
 1. Create a new level or open an existing scene
-2. Open the Gaussian Capture tool: **Window → Gaussian Capture**
-3. Click **"Create Capture Actor"**
+2. Place your target object in the scene (e.g., a character, prop, or static mesh)
+3. Open the Gaussian Capture tool: **Window → Gaussian Capture**
+4. Click **"Create Capture Actor"**
 
 ### Configuration
 In the Details panel of the GaussianCaptureActor:
 
+**Method 1: Using Target Actor (Recommended)**
 ```
 Capture Mode: Dome
-Target Location: (0, 0, 100)  // Center of your object
+Target Actor: [Drag your object here from the Outliner]
+Use Actor Bounds Center: true  // Automatically targets object center
+Dome Rings: 3
+Views Per Ring: 8
+Dome Radius: 500.0
+Dome Height: 200.0
+Transparent Background: true
+Image Width: 1920
+Image Height: 1080
+Camera FOV: 90.0
+Ray Count: 10000
+Max Ray Distance: 10000.0
+```
+
+**Method 2: Using Manual Target Location**
+```
+Capture Mode: Dome
+Target Actor: None
+Target Location: (0, 0, 100)  // Manually set coordinates
 Dome Rings: 3
 Views Per Ring: 8
 Dome Radius: 500.0
@@ -160,23 +180,26 @@ CharacterAnimation/
 Capture a small prop or collectible item with high detail.
 
 ### Setup
-1. Place object at world origin (0, 0, 0)
-2. Ensure good lighting (use Sky Light + Directional Light)
-3. Add a clean backdrop or use transparent background
+1. Place your prop in the scene
+2. Select the prop actor in the Outliner
+3. Ensure good lighting (use Sky Light + Directional Light)
+4. Add a clean backdrop or use transparent background
+5. Create a GaussianCaptureActor
 
 ### Configuration
 ```
 Capture Mode: Dome
-Target Location: (0, 0, 50)  // Object center height
+Target Actor: [Your prop actor]
+Use Actor Bounds Center: true  // Automatically centers on the object
 Dome Rings: 4
 Views Per Ring: 12
-Dome Radius: 150.0  // Close proximity
+Dome Radius: 150.0  // Close proximity for small objects
 Dome Height: 75.0
 Transparent Background: true
 Image Width: 2048
 Image Height: 2048
 Camera FOV: 60.0  // Narrower FOV for less distortion
-Ray Count: 50000  // Dense point cloud
+Ray Count: 50000  // Dense point cloud for high detail
 Max Ray Distance: 5000.0
 ```
 
