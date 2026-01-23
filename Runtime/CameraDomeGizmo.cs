@@ -23,6 +23,13 @@ public class CameraDomeGizmo : MonoBehaviour
     public int numSpherePoints = 100;
     public float sphereRadius = 5f;
 
+    // Ellipsoid capture parameters
+    public Transform ellipsoidTarget;
+    public int numEllipsoidPoints = 100;
+    public float ellipsoidRadiusX = 5f;
+    public float ellipsoidRadiusY = 3f;
+    public float ellipsoidRadiusZ = 4f;
+
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.cyan;
@@ -92,6 +99,25 @@ public class CameraDomeGizmo : MonoBehaviour
                 Gizmos.DrawLine(point, point + direction * 0.5f);
             }
         }
+        else if (mode == 3)
+        {
+            // Ellipsoid capture mode
+            if (ellipsoidTarget == null) return;
+
+            List<Vector3> ellipsoidPoints = GenerateFibonacciEllipsoidPoints(numEllipsoidPoints, ellipsoidRadiusX, ellipsoidRadiusY, ellipsoidRadiusZ, ellipsoidTarget.position);
+
+            Gizmos.color = Color.magenta;
+            // Draw ellipsoid wireframe approximation with lines
+            DrawEllipsoidWireframe(ellipsoidTarget.position, ellipsoidRadiusX, ellipsoidRadiusY, ellipsoidRadiusZ);
+
+            Gizmos.color = Color.cyan;
+            foreach (Vector3 point in ellipsoidPoints)
+            {
+                Gizmos.DrawSphere(point, gizmoSize);
+                Vector3 direction = (ellipsoidTarget.position - point).normalized;
+                Gizmos.DrawLine(point, point + direction * 0.5f);
+            }
+        }
     }
 
     private List<Vector3> GenerateCustomSphericalDirections()
@@ -145,6 +171,70 @@ public class CameraDomeGizmo : MonoBehaviour
         }
 
         return points;
+    }
+
+    // Generate points uniformly distributed on an ellipsoid using Fibonacci lattice
+    private List<Vector3> GenerateFibonacciEllipsoidPoints(int numPoints, float radiusX, float radiusY, float radiusZ, Vector3 center)
+    {
+        List<Vector3> points = new List<Vector3>();
+        float phi = Mathf.PI * (3.0f - Mathf.Sqrt(5.0f)); // Golden angle in radians
+
+        for (int i = 0; i < numPoints; i++)
+        {
+            // Generate uniform sphere point
+            float y = 1.0f - (i / (float)(numPoints - 1)) * 2.0f; // y goes from 1 to -1
+            float radiusAtY = Mathf.Sqrt(1.0f - y * y); // radius at y
+
+            float theta = phi * i; // golden angle increment
+
+            float x = Mathf.Cos(theta) * radiusAtY;
+            float z = Mathf.Sin(theta) * radiusAtY;
+
+            // Scale by ellipsoid radii to create ellipsoid
+            Vector3 point = center + new Vector3(x * radiusX, y * radiusY, z * radiusZ);
+            points.Add(point);
+        }
+
+        return points;
+    }
+
+    // Draw ellipsoid wireframe approximation
+    private void DrawEllipsoidWireframe(Vector3 center, float radiusX, float radiusY, float radiusZ)
+    {
+        int segments = 32;
+
+        // Draw XY ellipse (Z=0 plane)
+        for (int i = 0; i < segments; i++)
+        {
+            float angle1 = (i / (float)segments) * Mathf.PI * 2;
+            float angle2 = ((i + 1) / (float)segments) * Mathf.PI * 2;
+
+            Vector3 p1 = center + new Vector3(Mathf.Cos(angle1) * radiusX, Mathf.Sin(angle1) * radiusY, 0);
+            Vector3 p2 = center + new Vector3(Mathf.Cos(angle2) * radiusX, Mathf.Sin(angle2) * radiusY, 0);
+            Gizmos.DrawLine(p1, p2);
+        }
+
+        // Draw XZ ellipse (Y=0 plane)
+        for (int i = 0; i < segments; i++)
+        {
+            float angle1 = (i / (float)segments) * Mathf.PI * 2;
+            float angle2 = ((i + 1) / (float)segments) * Mathf.PI * 2;
+
+            Vector3 p1 = center + new Vector3(Mathf.Cos(angle1) * radiusX, 0, Mathf.Sin(angle1) * radiusZ);
+            Vector3 p2 = center + new Vector3(Mathf.Cos(angle2) * radiusX, 0, Mathf.Sin(angle2) * radiusZ);
+            Gizmos.DrawLine(p1, p2);
+        }
+
+        // Draw YZ ellipse (X=0 plane)
+        for (int i = 0; i < segments; i++)
+        {
+            float angle1 = (i / (float)segments) * Mathf.PI * 2;
+            float angle2 = ((i + 1) / (float)segments) * Mathf.PI * 2;
+
+            Vector3 p1 = center + new Vector3(0, Mathf.Cos(angle1) * radiusY, Mathf.Sin(angle1) * radiusZ);
+            Vector3 p2 = center + new Vector3(0, Mathf.Cos(angle2) * radiusY, Mathf.Sin(angle2) * radiusZ);
+            Gizmos.DrawLine(p1, p2);
+        }
     }
 
     private void DrawSubdivisionGrid()
