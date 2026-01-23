@@ -1690,26 +1690,26 @@ public class CameraCaptureEditor : EditorWindow
             }
         }
 
-        // Generate top cap points using Fibonacci disc pattern (cameras looking down)
+        // Generate top cap points using Fibonacci disc pattern (cameras looking at target)
         List<Vector2> topCapDisc = GenerateFibonacciDisc(capPoints, radius);
         foreach (Vector2 disc in topCapDisc)
         {
             Vector3 position = center + new Vector3(disc.x, height / 2f, disc.y);
 
-            // Look down at the target (vertical view)
-            Vector3 lookAt = center + new Vector3(disc.x, center.y - 1f, disc.y);
+            // Look at the target center
+            Vector3 lookAt = center;
 
             result.Add((position, lookAt, false));
         }
 
-        // Generate bottom cap points using Fibonacci disc pattern (cameras looking up)
+        // Generate bottom cap points using Fibonacci disc pattern (cameras looking at target)
         List<Vector2> bottomCapDisc = GenerateFibonacciDisc(capPoints, radius);
         foreach (Vector2 disc in bottomCapDisc)
         {
             Vector3 position = center + new Vector3(disc.x, -height / 2f, disc.y);
 
-            // Look up at the target (vertical view)
-            Vector3 lookAt = center + new Vector3(disc.x, center.y + 1f, disc.y);
+            // Look at the target center
+            Vector3 lookAt = center;
 
             result.Add((position, lookAt, false));
         }

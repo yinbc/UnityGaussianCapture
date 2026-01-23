@@ -379,22 +379,22 @@ public class CameraDomeGizmo : MonoBehaviour
             }
         }
 
-        // Generate top cap points (cameras looking down)
+        // Generate top cap points (cameras looking at target)
         List<Vector2> topCapDisc = GenerateFibonacciDiscGizmo(capPoints, radius);
         foreach (Vector2 disc in topCapDisc)
         {
             Vector3 position = center + new Vector3(disc.x, height / 2f, disc.y);
-            Vector3 lookAt = center + new Vector3(disc.x, center.y - 1f, disc.y);
+            Vector3 lookAt = center;
 
             result.Add((position, lookAt, false));
         }
 
-        // Generate bottom cap points (cameras looking up)
+        // Generate bottom cap points (cameras looking at target)
         List<Vector2> bottomCapDisc = GenerateFibonacciDiscGizmo(capPoints, radius);
         foreach (Vector2 disc in bottomCapDisc)
         {
             Vector3 position = center + new Vector3(disc.x, -height / 2f, disc.y);
-            Vector3 lookAt = center + new Vector3(disc.x, center.y + 1f, disc.y);
+            Vector3 lookAt = center;
 
             result.Add((position, lookAt, false));
         }
