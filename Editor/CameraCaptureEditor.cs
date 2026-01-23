@@ -58,6 +58,13 @@ public class CameraCaptureEditor : EditorWindow
     private float ellipsoidRadiusY = 3f;
     private float ellipsoidRadiusZ = 4f;
 
+    // Cylinder Capture settings
+    private Transform cylinderTarget;
+    private int numCylinderSidePoints = 50;
+    private int numCylinderCapPoints = 20;
+    private float cylinderRadius = 3f;
+    private float cylinderHeight = 5f;
+
     int w = 1920;
     int h = 1080;
     int rays = 500;
@@ -128,7 +135,7 @@ public class CameraCaptureEditor : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         GUILayout.Space(10);
-        tabIndex = GUILayout.Toolbar(tabIndex, new string[] { "Dome Capture", "Volume Capture", "Spherical Capture", "Ellipsoid Capture" });
+        tabIndex = GUILayout.Toolbar(tabIndex, new string[] { "Dome Capture", "Volume Capture", "Spherical Capture", "Ellipsoid Capture", "Cylinder Capture" });
 
 
         if (tabIndex == 0)
@@ -137,8 +144,10 @@ public class CameraCaptureEditor : EditorWindow
             DrawVolumeCaptureUI();
         else if (tabIndex == 2)
             DrawFullSphereCaptureUI();
-        else
+        else if (tabIndex == 3)
             DrawEllipsoidCaptureUI();
+        else
+            DrawCylinderCaptureUI();
 
 
         GUILayout.Space(20);
@@ -263,6 +272,13 @@ public class CameraCaptureEditor : EditorWindow
             gizmoViewer.GetComponent<CameraDomeGizmo>().ellipsoidRadiusY = ellipsoidRadiusY;
             gizmoViewer.GetComponent<CameraDomeGizmo>().ellipsoidRadiusZ = ellipsoidRadiusZ;
 
+            // Cylinder capture parameters
+            gizmoViewer.GetComponent<CameraDomeGizmo>().cylinderTarget = cylinderTarget;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().numCylinderSidePoints = numCylinderSidePoints;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().numCylinderCapPoints = numCylinderCapPoints;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().cylinderRadius = cylinderRadius;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().cylinderHeight = cylinderHeight;
+
         }
     }
 
@@ -361,6 +377,30 @@ public class CameraCaptureEditor : EditorWindow
                 }
 
                 StartCaptureEllipsoid(runtimeAnim);
+            }
+    }
+
+    private void DrawCylinderCaptureUI()
+    {
+        GUILayout.Label("Cylinder Capture Settings", EditorStyles.boldLabel);
+
+        cylinderTarget = (Transform)EditorGUILayout.ObjectField("Target", cylinderTarget, typeof(Transform), true);
+        numCylinderSidePoints = EditorGUILayout.IntField("Side Points", numCylinderSidePoints);
+        numCylinderCapPoints = EditorGUILayout.IntField("Cap Points", numCylinderCapPoints);
+        cylinderRadius = EditorGUILayout.FloatField("Radius", cylinderRadius);
+        cylinderHeight = EditorGUILayout.FloatField("Height", cylinderHeight);
+
+        GUILayout.Space(10);
+        if (!isRunning)
+            if (GUILayout.Button("Capture and Export COLMAP"))
+            {
+                if (cameraToUse == null || cylinderTarget == null || string.IsNullOrEmpty(outputFolder))
+                {
+                    Debug.LogError("Please assign a camera, target and an output folder.");
+                    return;
+                }
+
+                StartCaptureCylinder(runtimeAnim);
             }
     }
 
@@ -609,7 +649,7 @@ public class CameraCaptureEditor : EditorWindow
                 }
                 var window = GetWindow<CameraCaptureEditor>();
 
-                // captureMode: 0=Dome, 1=Volume, 2=Spherical, 3=Ellipsoid
+                // captureMode: 0=Dome, 1=Volume, 2=Spherical, 3=Ellipsoid, 4=Cylinder
                 if (captureMode == 0)
                 {
                     yield return window.StartCoroutine(window.CaptureViewsAndExportColmap("/" + i + "/"));
@@ -625,6 +665,10 @@ public class CameraCaptureEditor : EditorWindow
                 else if (captureMode == 3)
                 {
                     yield return window.StartCoroutine(window.CaptureEllipsoidViewsAndExportColmap("/" + i + "/"));
+                }
+                else if (captureMode == 4)
+                {
+                    yield return window.StartCoroutine(window.CaptureCylinderViewsAndExportColmap("/" + i + "/"));
                 }
             }
             EditorUtility.RevealInFinder(outputFolder);
@@ -1274,6 +1318,201 @@ public class CameraCaptureEditor : EditorWindow
             EditorApplication.isPaused = false;
     }
 
+    public IEnumerator CaptureCylinderViewsAndExportColmap(string outAdd)
+    {
+        isRunning = true;
+
+        string folderPath = outputFolder + outAdd;
+        Directory.CreateDirectory(folderPath);
+
+        // Create COLMAP standard directory structure
+        string imagesFolder = Path.Combine(folderPath, "images");
+        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        Directory.CreateDirectory(imagesFolder);
+        Directory.CreateDirectory(sparseFolder);
+
+        // === cameras.txt ===
+        string camerasTxt = Path.Combine(sparseFolder, "cameras.txt");
+
+        float fov = cameraToUse.fieldOfView;
+        float fy = 0.5f * h / Mathf.Tan(0.5f * fov * Mathf.Deg2Rad);
+        float fx = fy;
+
+        float cx = w / 2f;
+        float cy = h / 2f;
+
+        using (StreamWriter camWriter = new StreamWriter(camerasTxt))
+        {
+            camWriter.WriteLine("# Camera list with one line of data per camera:");
+            camWriter.WriteLine("#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]");
+            camWriter.WriteLine($"1 PINHOLE {w} {h} {fx.ToString(CultureInfo.InvariantCulture)} {fy.ToString(CultureInfo.InvariantCulture)} {cx} {cy}");
+        }
+
+        // === images.txt ===
+        string imagesTxt = Path.Combine(sparseFolder, "images.txt");
+        using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
+        {
+            imgWriter.WriteLine("# Image list with two lines per image:");
+            imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
+            imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
+
+            // Use ARGBFloat for EXR or tone mapping (linear, HDR), Default for PNG (sRGB, prevents dark images)
+            RenderTextureFormat rtFormat = (imageFormat == "exr" || useToneMapping) ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+
+            int imageId = 1;
+            int batchSize = 40;
+            int batchCounter = 0;
+
+            StreamWriter writer3D = new StreamWriter(Path.Combine(sparseFolder, "points3D.txt"));
+            writer3D.WriteLine("# 3D point list with one line of data per point:");
+            writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
+            int pointId = 1;
+
+            // Generate cylinder points (position, lookAt, isSide)
+            List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPoints(numCylinderSidePoints, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
+
+            int totalImages = cylinderPoints.Count;
+            int currentImage = 0;
+
+            // Bake skinned meshes for collision detection
+            foreach (SkinnedMeshRenderer r in GameObject.FindObjectsOfType<SkinnedMeshRenderer>())
+            {
+                if (!r.GetComponent<MeshCollider>())
+                {
+                    r.gameObject.AddComponent<MeshCollider>();
+                }
+
+                Mesh bakedMesh = new Mesh();
+                r.BakeMesh(bakedMesh);
+
+                r.GetComponent<MeshCollider>().sharedMesh = null;
+                r.GetComponent<MeshCollider>().sharedMesh = bakedMesh;
+            }
+
+            foreach (var point in cylinderPoints)
+            {
+                float progress = (float)currentImage / totalImages;
+                EditorUtility.DisplayProgressBar("Capture Cylinder", $"Image {currentImage + 1} / {totalImages}", progress);
+
+                Vector3 position = point.Item1;
+                Vector3 lookAt = point.Item2;
+
+                cameraToUse.transform.position = position;
+                cameraToUse.transform.LookAt(lookAt);
+
+                Matrix4x4 worldToCamera = cameraToUse.worldToCameraMatrix;
+                Matrix4x4 unityToColmap = Matrix4x4.Scale(new Vector3(1, -1, -1));
+                Matrix4x4 colmapMatrix = unityToColmap * worldToCamera;
+
+                Matrix4x4 R = colmapMatrix;
+                R.SetColumn(3, new Vector4(0, 0, 0, 1));
+                Quaternion q = QuaternionFromMatrix(R);
+                Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
+
+                string imageName = $"cylinder_{imageId:D4}.{imageFormat}";
+                string imagePath = Path.Combine(imagesFolder, imageName);
+
+                cameraToUse.clearFlags = CameraClearFlags.SolidColor;
+                cameraToUse.backgroundColor = new Color(0, 0, 0, 0);
+
+                cameraToUse.targetTexture = rt;
+                cameraToUse.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, imageId, ref pointId);
+
+                byte[] imageData;
+                if (imageFormat == "exr")
+                {
+                    imageData = tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+                }
+                else if (useToneMapping)
+                {
+                    Texture2D ldrTex = ApplyToneMapping(tex, exposure);
+                    imageData = ldrTex.EncodeToPNG();
+                    DestroyImmediate(ldrTex);
+                }
+                else
+                {
+                    imageData = tex.EncodeToPNG();
+                }
+                File.WriteAllBytes(imagePath, imageData);
+
+                imgWriter.WriteLine($"{imageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
+                imgWriter.WriteLine();
+
+                imageId++;
+                batchCounter++;
+                currentImage++;
+
+                if (cancel)
+                {
+                    Debug.LogWarning("Capture canceled.");
+                    EditorUtility.ClearProgressBar();
+                    cancel = false;
+                    isRunning = false;
+
+                    yield break;
+                }
+
+                if (batchCounter >= batchSize)
+                {
+                    batchCounter = 0;
+
+                    cameraToUse.targetTexture = null;
+                    RenderTexture.active = null;
+                    GL.Clear(true, true, Color.clear);
+
+                    tex = null;
+                    rt.Release();
+                    rt = null;
+
+                    DestroyImmediate(rt);
+                    DestroyImmediate(tex);
+
+                    EditorUtility.UnloadUnusedAssetsImmediate();
+                    AssetDatabase.SaveAssets();
+                    EditorApplication.QueuePlayerLoopUpdate();
+
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+
+                    rt = new RenderTexture(w, h, 32, rtFormat);
+                    tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+
+                    yield return null;
+                }
+            }
+
+            writer3D.Close();
+
+            cameraToUse.targetTexture = null;
+            RenderTexture.active = null;
+            DestroyImmediate(rt);
+            DestroyImmediate(tex);
+        }
+
+        Debug.Log("Cylinder Capture + COLMAP files finished!");
+        AssetDatabase.Refresh();
+        EditorUtility.ClearProgressBar();
+
+        if (!runtimeAnim)
+            EditorUtility.RevealInFinder(folderPath);
+        isRunning = false;
+
+        if (!runtimeAnim && TrainPostShot)
+        {
+            RunPostshotBatch();
+        }
+
+        yield return new WaitForEndOfFrame();
+        if (EditorApplication.isPaused == true)
+            EditorApplication.isPaused = false;
+    }
+
     private static void StartCaptureVolume(bool isRuntime)
     {
         var window = GetWindow<CameraCaptureEditor>();
@@ -1317,6 +1556,17 @@ public class CameraCaptureEditor : EditorWindow
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureEllipsoidViewsAndExportColmap(""), window);
+    }
+
+    private static void StartCaptureCylinder(bool isRuntime)
+    {
+        var window = GetWindow<CameraCaptureEditor>();
+        if (isRuntime)
+        {
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(4), window);
+        }
+        else
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureCylinderViewsAndExportColmap(""), window);
     }
 
 
@@ -1395,6 +1645,75 @@ public class CameraCaptureEditor : EditorWindow
             // Scale by ellipsoid radii to create ellipsoid
             Vector3 point = center + new Vector3(x * radiusX, y * radiusY, z * radiusZ);
             points.Add(point);
+        }
+
+        return points;
+    }
+
+    // Generate cylinder capture points and directions
+    // Returns a list of (position, lookAtTarget, isSideCamera)
+    private List<(Vector3 position, Vector3 lookAt, bool isSide)> GenerateCylinderPoints(int sidePoints, int capPoints, float radius, float height, Vector3 center)
+    {
+        List<(Vector3, Vector3, bool)> result = new List<(Vector3, Vector3, bool)>();
+
+        // Generate side points (horizontal cameras looking at center)
+        for (int i = 0; i < sidePoints; i++)
+        {
+            float angle = (i / (float)sidePoints) * Mathf.PI * 2f;
+            float x = Mathf.Cos(angle) * radius;
+            float z = Mathf.Sin(angle) * radius;
+
+            // Position cameras at mid-height of cylinder
+            Vector3 position = center + new Vector3(x, 0, z);
+
+            // Look at the center horizontally (same Y level)
+            Vector3 lookAt = center + new Vector3(0, position.y, 0);
+
+            result.Add((position, lookAt, true));
+        }
+
+        // Generate top cap points using Fibonacci disc pattern (cameras looking down)
+        List<Vector2> topCapDisc = GenerateFibonacciDisc(capPoints, radius);
+        foreach (Vector2 disc in topCapDisc)
+        {
+            Vector3 position = center + new Vector3(disc.x, height / 2f, disc.y);
+
+            // Look down at the target (vertical view)
+            Vector3 lookAt = center + new Vector3(disc.x, center.y - 1f, disc.y);
+
+            result.Add((position, lookAt, false));
+        }
+
+        // Generate bottom cap points using Fibonacci disc pattern (cameras looking up)
+        List<Vector2> bottomCapDisc = GenerateFibonacciDisc(capPoints, radius);
+        foreach (Vector2 disc in bottomCapDisc)
+        {
+            Vector3 position = center + new Vector3(disc.x, -height / 2f, disc.y);
+
+            // Look up at the target (vertical view)
+            Vector3 lookAt = center + new Vector3(disc.x, center.y + 1f, disc.y);
+
+            result.Add((position, lookAt, false));
+        }
+
+        return result;
+    }
+
+    // Generate points uniformly distributed on a disc using Fibonacci lattice
+    private List<Vector2> GenerateFibonacciDisc(int numPoints, float radius)
+    {
+        List<Vector2> points = new List<Vector2>();
+        float phi = Mathf.PI * (3.0f - Mathf.Sqrt(5.0f)); // Golden angle
+
+        for (int i = 0; i < numPoints; i++)
+        {
+            float r = radius * Mathf.Sqrt(i / (float)numPoints);
+            float theta = phi * i;
+
+            float x = r * Mathf.Cos(theta);
+            float y = r * Mathf.Sin(theta);
+
+            points.Add(new Vector2(x, y));
         }
 
         return points;

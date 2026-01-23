@@ -30,6 +30,13 @@ public class CameraDomeGizmo : MonoBehaviour
     public float ellipsoidRadiusY = 3f;
     public float ellipsoidRadiusZ = 4f;
 
+    // Cylinder capture parameters
+    public Transform cylinderTarget;
+    public int numCylinderSidePoints = 50;
+    public int numCylinderCapPoints = 20;
+    public float cylinderRadius = 3f;
+    public float cylinderHeight = 5f;
+
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.cyan;
@@ -116,6 +123,29 @@ public class CameraDomeGizmo : MonoBehaviour
                 Gizmos.DrawSphere(point, gizmoSize);
                 Vector3 direction = (ellipsoidTarget.position - point).normalized;
                 Gizmos.DrawLine(point, point + direction * 0.5f);
+            }
+        }
+        else if (mode == 4)
+        {
+            // Cylinder capture mode
+            if (cylinderTarget == null) return;
+
+            // Draw cylinder wireframe
+            Gizmos.color = Color.green;
+            DrawCylinderWireframe(cylinderTarget.position, cylinderRadius, cylinderHeight);
+
+            // Generate and draw camera positions
+            List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPointsGizmo(numCylinderSidePoints, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
+
+            Gizmos.color = Color.cyan;
+            foreach (var point in cylinderPoints)
+            {
+                Vector3 position = point.Item1;
+                Vector3 lookAt = point.Item2;
+
+                Gizmos.DrawSphere(position, gizmoSize);
+                Vector3 direction = (lookAt - position).normalized;
+                Gizmos.DrawLine(position, position + direction * 0.5f);
             }
         }
     }
@@ -273,6 +303,104 @@ public class CameraDomeGizmo : MonoBehaviour
                 Gizmos.DrawLine(p1, p2);
             }
         }
+    }
+
+    // Draw cylinder wireframe
+    private void DrawCylinderWireframe(Vector3 center, float radius, float height)
+    {
+        int segments = 32;
+
+        // Draw top circle
+        for (int i = 0; i < segments; i++)
+        {
+            float angle1 = (i / (float)segments) * Mathf.PI * 2;
+            float angle2 = ((i + 1) / (float)segments) * Mathf.PI * 2;
+
+            Vector3 p1 = center + new Vector3(Mathf.Cos(angle1) * radius, height / 2f, Mathf.Sin(angle1) * radius);
+            Vector3 p2 = center + new Vector3(Mathf.Cos(angle2) * radius, height / 2f, Mathf.Sin(angle2) * radius);
+            Gizmos.DrawLine(p1, p2);
+        }
+
+        // Draw bottom circle
+        for (int i = 0; i < segments; i++)
+        {
+            float angle1 = (i / (float)segments) * Mathf.PI * 2;
+            float angle2 = ((i + 1) / (float)segments) * Mathf.PI * 2;
+
+            Vector3 p1 = center + new Vector3(Mathf.Cos(angle1) * radius, -height / 2f, Mathf.Sin(angle1) * radius);
+            Vector3 p2 = center + new Vector3(Mathf.Cos(angle2) * radius, -height / 2f, Mathf.Sin(angle2) * radius);
+            Gizmos.DrawLine(p1, p2);
+        }
+
+        // Draw vertical lines connecting top and bottom
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = (i / 8f) * Mathf.PI * 2;
+            Vector3 top = center + new Vector3(Mathf.Cos(angle) * radius, height / 2f, Mathf.Sin(angle) * radius);
+            Vector3 bottom = center + new Vector3(Mathf.Cos(angle) * radius, -height / 2f, Mathf.Sin(angle) * radius);
+            Gizmos.DrawLine(top, bottom);
+        }
+    }
+
+    // Generate cylinder capture points for gizmo (position, lookAt, isSide)
+    private List<(Vector3, Vector3, bool)> GenerateCylinderPointsGizmo(int sidePoints, int capPoints, float radius, float height, Vector3 center)
+    {
+        List<(Vector3, Vector3, bool)> result = new List<(Vector3, Vector3, bool)>();
+
+        // Generate side points (horizontal cameras looking at center)
+        for (int i = 0; i < sidePoints; i++)
+        {
+            float angle = (i / (float)sidePoints) * Mathf.PI * 2f;
+            float x = Mathf.Cos(angle) * radius;
+            float z = Mathf.Sin(angle) * radius;
+
+            Vector3 position = center + new Vector3(x, 0, z);
+            Vector3 lookAt = center + new Vector3(0, position.y, 0);
+
+            result.Add((position, lookAt, true));
+        }
+
+        // Generate top cap points (cameras looking down)
+        List<Vector2> topCapDisc = GenerateFibonacciDiscGizmo(capPoints, radius);
+        foreach (Vector2 disc in topCapDisc)
+        {
+            Vector3 position = center + new Vector3(disc.x, height / 2f, disc.y);
+            Vector3 lookAt = center + new Vector3(disc.x, center.y - 1f, disc.y);
+
+            result.Add((position, lookAt, false));
+        }
+
+        // Generate bottom cap points (cameras looking up)
+        List<Vector2> bottomCapDisc = GenerateFibonacciDiscGizmo(capPoints, radius);
+        foreach (Vector2 disc in bottomCapDisc)
+        {
+            Vector3 position = center + new Vector3(disc.x, -height / 2f, disc.y);
+            Vector3 lookAt = center + new Vector3(disc.x, center.y + 1f, disc.y);
+
+            result.Add((position, lookAt, false));
+        }
+
+        return result;
+    }
+
+    // Generate points uniformly distributed on a disc using Fibonacci lattice
+    private List<Vector2> GenerateFibonacciDiscGizmo(int numPoints, float radius)
+    {
+        List<Vector2> points = new List<Vector2>();
+        float phi = Mathf.PI * (3.0f - Mathf.Sqrt(5.0f)); // Golden angle
+
+        for (int i = 0; i < numPoints; i++)
+        {
+            float r = radius * Mathf.Sqrt(i / (float)numPoints);
+            float theta = phi * i;
+
+            float x = r * Mathf.Cos(theta);
+            float y = r * Mathf.Sin(theta);
+
+            points.Add(new Vector2(x, y));
+        }
+
+        return points;
     }
 
     private void Update()
