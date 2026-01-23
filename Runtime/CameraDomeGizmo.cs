@@ -33,6 +33,7 @@ public class CameraDomeGizmo : MonoBehaviour
     // Cylinder capture parameters
     public Transform cylinderTarget;
     public int numCylinderSidePoints = 50;
+    public int numCylinderLayers = 3;
     public int numCylinderCapPoints = 20;
     public float cylinderRadius = 3f;
     public float cylinderHeight = 5f;
@@ -135,7 +136,7 @@ public class CameraDomeGizmo : MonoBehaviour
             DrawCylinderWireframe(cylinderTarget.position, cylinderRadius, cylinderHeight);
 
             // Generate and draw camera positions
-            List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPointsGizmo(numCylinderSidePoints, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
+            List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPointsGizmo(numCylinderSidePoints, numCylinderLayers, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
 
             Gizmos.color = Color.cyan;
             foreach (var point in cylinderPoints)
@@ -343,21 +344,39 @@ public class CameraDomeGizmo : MonoBehaviour
     }
 
     // Generate cylinder capture points for gizmo (position, lookAt, isSide)
-    private List<(Vector3, Vector3, bool)> GenerateCylinderPointsGizmo(int sidePoints, int capPoints, float radius, float height, Vector3 center)
+    private List<(Vector3, Vector3, bool)> GenerateCylinderPointsGizmo(int sidePoints, int layers, int capPoints, float radius, float height, Vector3 center)
     {
         List<(Vector3, Vector3, bool)> result = new List<(Vector3, Vector3, bool)>();
 
-        // Generate side points (horizontal cameras looking at center)
-        for (int i = 0; i < sidePoints; i++)
+        // Generate side points (horizontal cameras looking at center) at multiple height levels
+        for (int layer = 0; layer < layers; layer++)
         {
-            float angle = (i / (float)sidePoints) * Mathf.PI * 2f;
-            float x = Mathf.Cos(angle) * radius;
-            float z = Mathf.Sin(angle) * radius;
+            // Calculate Y position for this layer
+            float layerY;
+            if (layers == 1)
+            {
+                layerY = 0f; // Single layer at center
+            }
+            else
+            {
+                // Distribute layers evenly from -height/2 to +height/2
+                layerY = -height / 2f + (layer / (float)(layers - 1)) * height;
+            }
 
-            Vector3 position = center + new Vector3(x, 0, z);
-            Vector3 lookAt = center + new Vector3(0, position.y, 0);
+            for (int i = 0; i < sidePoints; i++)
+            {
+                float angle = (i / (float)sidePoints) * Mathf.PI * 2f;
+                float x = Mathf.Cos(angle) * radius;
+                float z = Mathf.Sin(angle) * radius;
 
-            result.Add((position, lookAt, true));
+                // Position camera at this layer height
+                Vector3 position = center + new Vector3(x, layerY, z);
+
+                // Look at the center horizontally (same Y level)
+                Vector3 lookAt = center + new Vector3(0, layerY, 0);
+
+                result.Add((position, lookAt, true));
+            }
         }
 
         // Generate top cap points (cameras looking down)

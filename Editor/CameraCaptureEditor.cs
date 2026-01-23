@@ -61,6 +61,7 @@ public class CameraCaptureEditor : EditorWindow
     // Cylinder Capture settings
     private Transform cylinderTarget;
     private int numCylinderSidePoints = 50;
+    private int numCylinderLayers = 3;
     private int numCylinderCapPoints = 20;
     private float cylinderRadius = 3f;
     private float cylinderHeight = 5f;
@@ -275,6 +276,7 @@ public class CameraCaptureEditor : EditorWindow
             // Cylinder capture parameters
             gizmoViewer.GetComponent<CameraDomeGizmo>().cylinderTarget = cylinderTarget;
             gizmoViewer.GetComponent<CameraDomeGizmo>().numCylinderSidePoints = numCylinderSidePoints;
+            gizmoViewer.GetComponent<CameraDomeGizmo>().numCylinderLayers = numCylinderLayers;
             gizmoViewer.GetComponent<CameraDomeGizmo>().numCylinderCapPoints = numCylinderCapPoints;
             gizmoViewer.GetComponent<CameraDomeGizmo>().cylinderRadius = cylinderRadius;
             gizmoViewer.GetComponent<CameraDomeGizmo>().cylinderHeight = cylinderHeight;
@@ -385,7 +387,8 @@ public class CameraCaptureEditor : EditorWindow
         GUILayout.Label("Cylinder Capture Settings", EditorStyles.boldLabel);
 
         cylinderTarget = (Transform)EditorGUILayout.ObjectField("Target", cylinderTarget, typeof(Transform), true);
-        numCylinderSidePoints = EditorGUILayout.IntField("Side Points", numCylinderSidePoints);
+        numCylinderSidePoints = EditorGUILayout.IntField("Side Points (per layer)", numCylinderSidePoints);
+        numCylinderLayers = EditorGUILayout.IntField("Side Layers", numCylinderLayers);
         numCylinderCapPoints = EditorGUILayout.IntField("Cap Points", numCylinderCapPoints);
         cylinderRadius = EditorGUILayout.FloatField("Radius", cylinderRadius);
         cylinderHeight = EditorGUILayout.FloatField("Height", cylinderHeight);
@@ -1371,7 +1374,7 @@ public class CameraCaptureEditor : EditorWindow
             int pointId = 1;
 
             // Generate cylinder points (position, lookAt, isSide)
-            List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPoints(numCylinderSidePoints, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
+            List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPoints(numCylinderSidePoints, numCylinderLayers, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
 
             int totalImages = cylinderPoints.Count;
             int currentImage = 0;
@@ -1652,24 +1655,39 @@ public class CameraCaptureEditor : EditorWindow
 
     // Generate cylinder capture points and directions
     // Returns a list of (position, lookAtTarget, isSideCamera)
-    private List<(Vector3 position, Vector3 lookAt, bool isSide)> GenerateCylinderPoints(int sidePoints, int capPoints, float radius, float height, Vector3 center)
+    private List<(Vector3 position, Vector3 lookAt, bool isSide)> GenerateCylinderPoints(int sidePoints, int layers, int capPoints, float radius, float height, Vector3 center)
     {
         List<(Vector3, Vector3, bool)> result = new List<(Vector3, Vector3, bool)>();
 
-        // Generate side points (horizontal cameras looking at center)
-        for (int i = 0; i < sidePoints; i++)
+        // Generate side points (horizontal cameras looking at center) at multiple height levels
+        for (int layer = 0; layer < layers; layer++)
         {
-            float angle = (i / (float)sidePoints) * Mathf.PI * 2f;
-            float x = Mathf.Cos(angle) * radius;
-            float z = Mathf.Sin(angle) * radius;
+            // Calculate Y position for this layer
+            float layerY;
+            if (layers == 1)
+            {
+                layerY = 0f; // Single layer at center
+            }
+            else
+            {
+                // Distribute layers evenly from -height/2 to +height/2
+                layerY = -height / 2f + (layer / (float)(layers - 1)) * height;
+            }
 
-            // Position cameras at mid-height of cylinder
-            Vector3 position = center + new Vector3(x, 0, z);
+            for (int i = 0; i < sidePoints; i++)
+            {
+                float angle = (i / (float)sidePoints) * Mathf.PI * 2f;
+                float x = Mathf.Cos(angle) * radius;
+                float z = Mathf.Sin(angle) * radius;
 
-            // Look at the center horizontally (same Y level)
-            Vector3 lookAt = center + new Vector3(0, position.y, 0);
+                // Position camera at this layer height
+                Vector3 position = center + new Vector3(x, layerY, z);
 
-            result.Add((position, lookAt, true));
+                // Look at the center horizontally (same Y level)
+                Vector3 lookAt = center + new Vector3(0, layerY, 0);
+
+                result.Add((position, lookAt, true));
+            }
         }
 
         // Generate top cap points using Fibonacci disc pattern (cameras looking down)
