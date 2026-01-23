@@ -4,6 +4,9 @@
     "displayName": "Unity Gaussian Capture",
     "description": " Unity editor tool designed to capture views from a 3D scene for use in Gaussian Splatting pipelines.",
     "unity": "2022.3",
+    "dependencies": {
+        "com.unity.editorcoroutines": "1.0.0"
+    },
     "author": {
         "name": "KillianCartelier",
         "email": "",
