@@ -66,6 +66,13 @@ public class CameraCaptureEditor : EditorWindow
     private float cylinderRadius = 3f;
     private float cylinderHeight = 5f;
 
+    // Combined Capture settings
+    private bool useDomeInCombined = false;
+    private bool useVolumeInCombined = false;
+    private bool useSphericalInCombined = false;
+    private bool useEllipsoidInCombined = false;
+    private bool useCylinderInCombined = true;
+
     int w = 1920;
     int h = 1080;
     int rays = 500;
@@ -136,7 +143,7 @@ public class CameraCaptureEditor : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         GUILayout.Space(10);
-        tabIndex = GUILayout.Toolbar(tabIndex, new string[] { "Dome Capture", "Volume Capture", "Spherical Capture", "Ellipsoid Capture", "Cylinder Capture" });
+        tabIndex = GUILayout.Toolbar(tabIndex, new string[] { "Dome Capture", "Volume Capture", "Spherical Capture", "Ellipsoid Capture", "Cylinder Capture", "Combined Capture" });
 
 
         if (tabIndex == 0)
@@ -147,8 +154,10 @@ public class CameraCaptureEditor : EditorWindow
             DrawFullSphereCaptureUI();
         else if (tabIndex == 3)
             DrawEllipsoidCaptureUI();
-        else
+        else if (tabIndex == 4)
             DrawCylinderCaptureUI();
+        else
+            DrawCombinedCaptureUI();
 
 
         GUILayout.Space(20);
@@ -404,6 +413,71 @@ public class CameraCaptureEditor : EditorWindow
                 }
 
                 StartCaptureCylinder(runtimeAnim);
+            }
+    }
+
+    private void DrawCombinedCaptureUI()
+    {
+        GUILayout.Label("Combined Capture Settings", EditorStyles.boldLabel);
+        GUILayout.Label("Select capture modes to combine:", EditorStyles.label);
+
+        GUILayout.Space(5);
+        useDomeInCombined = EditorGUILayout.ToggleLeft("Include Dome Capture", useDomeInCombined);
+        if (useDomeInCombined)
+        {
+            EditorGUI.indentLevel++;
+            target = (Transform)EditorGUILayout.ObjectField("Target", target, typeof(Transform), true);
+            EditorGUI.indentLevel--;
+        }
+
+        GUILayout.Space(5);
+        useVolumeInCombined = EditorGUILayout.ToggleLeft("Include Volume Capture", useVolumeInCombined);
+
+        GUILayout.Space(5);
+        useSphericalInCombined = EditorGUILayout.ToggleLeft("Include Spherical Capture", useSphericalInCombined);
+        if (useSphericalInCombined)
+        {
+            EditorGUI.indentLevel++;
+            sphericalTarget = (Transform)EditorGUILayout.ObjectField("Target", sphericalTarget, typeof(Transform), true);
+            EditorGUI.indentLevel--;
+        }
+
+        GUILayout.Space(5);
+        useEllipsoidInCombined = EditorGUILayout.ToggleLeft("Include Ellipsoid Capture", useEllipsoidInCombined);
+        if (useEllipsoidInCombined)
+        {
+            EditorGUI.indentLevel++;
+            ellipsoidTarget = (Transform)EditorGUILayout.ObjectField("Target", ellipsoidTarget, typeof(Transform), true);
+            EditorGUI.indentLevel--;
+        }
+
+        GUILayout.Space(5);
+        useCylinderInCombined = EditorGUILayout.ToggleLeft("Include Cylinder Capture", useCylinderInCombined);
+        if (useCylinderInCombined)
+        {
+            EditorGUI.indentLevel++;
+            cylinderTarget = (Transform)EditorGUILayout.ObjectField("Target", cylinderTarget, typeof(Transform), true);
+            EditorGUI.indentLevel--;
+        }
+
+        GUILayout.Space(10);
+        if (!isRunning)
+            if (GUILayout.Button("Capture All Selected Modes"))
+            {
+                if (cameraToUse == null || string.IsNullOrEmpty(outputFolder))
+                {
+                    Debug.LogError("Please assign a camera and an output folder.");
+                    return;
+                }
+
+                // Check if at least one mode is selected
+                if (!useDomeInCombined && !useVolumeInCombined && !useSphericalInCombined && !useEllipsoidInCombined && !useCylinderInCombined)
+                {
+                    Debug.LogError("Please select at least one capture mode.");
+                    return;
+                }
+
+                StartCaptureCombined(runtimeAnim);
             }
     }
 
@@ -1516,6 +1590,308 @@ public class CameraCaptureEditor : EditorWindow
             EditorApplication.isPaused = false;
     }
 
+    public IEnumerator CaptureCombinedViewsAndExportColmap(string outAdd)
+    {
+        isRunning = true;
+
+        string folderPath = outputFolder + outAdd;
+        Directory.CreateDirectory(folderPath);
+
+        // Create COLMAP standard directory structure
+        string imagesFolder = Path.Combine(folderPath, "images");
+        string sparseFolder = Path.Combine(folderPath, "sparse", "0");
+        Directory.CreateDirectory(imagesFolder);
+        Directory.CreateDirectory(sparseFolder);
+
+        // === cameras.txt ===
+        string camerasTxt = Path.Combine(sparseFolder, "cameras.txt");
+        float fov = cameraToUse.fieldOfView;
+        float fy = 0.5f * h / Mathf.Tan(0.5f * fov * Mathf.Deg2Rad);
+        float fx = fy;
+        float cx = w / 2f;
+        float cy = h / 2f;
+
+        using (StreamWriter camWriter = new StreamWriter(camerasTxt))
+        {
+            camWriter.WriteLine("# Camera list with one line of data per camera:");
+            camWriter.WriteLine("#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]");
+            camWriter.WriteLine($"1 PINHOLE {w} {h} {fx.ToString(CultureInfo.InvariantCulture)} {fy.ToString(CultureInfo.InvariantCulture)} {cx} {cy}");
+        }
+
+        // === images.txt and points3D.txt ===
+        string imagesTxt = Path.Combine(sparseFolder, "images.txt");
+        using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
+        {
+            imgWriter.WriteLine("# Image list with two lines per image:");
+            imgWriter.WriteLine("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, IMAGE_NAME");
+            imgWriter.WriteLine("# POINTS2D[] as X, Y, POINT3D_ID");
+
+            RenderTextureFormat rtFormat = (imageFormat == "exr" || useToneMapping) ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.Default;
+            RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+
+            int globalImageId = 1;
+            int globalPointId = 1;
+            int batchSize = 40;
+            int batchCounter = 0;
+
+            StreamWriter writer3D = new StreamWriter(Path.Combine(sparseFolder, "points3D.txt"));
+            writer3D.WriteLine("# 3D point list with one line of data per point:");
+            writer3D.WriteLine("# POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)");
+
+            // Bake skinned meshes once for all modes
+            foreach (SkinnedMeshRenderer r in GameObject.FindObjectsOfType<SkinnedMeshRenderer>())
+            {
+                if (!r.GetComponent<MeshCollider>())
+                    r.gameObject.AddComponent<MeshCollider>();
+
+                Mesh bakedMesh = new Mesh();
+                r.BakeMesh(bakedMesh);
+                r.GetComponent<MeshCollider>().sharedMesh = null;
+                r.GetComponent<MeshCollider>().sharedMesh = bakedMesh;
+            }
+
+            // Helper method to capture a single view
+            System.Action<Vector3, Vector3, string> captureView = (position, lookAtPos, prefix) =>
+            {
+                cameraToUse.transform.position = position;
+                cameraToUse.transform.LookAt(lookAtPos);
+
+                Matrix4x4 worldToCamera = cameraToUse.worldToCameraMatrix;
+                Matrix4x4 unityToColmap = Matrix4x4.Scale(new Vector3(1, -1, -1));
+                Matrix4x4 colmapMatrix = unityToColmap * worldToCamera;
+
+                Matrix4x4 R = colmapMatrix;
+                R.SetColumn(3, new Vector4(0, 0, 0, 1));
+                Quaternion q = QuaternionFromMatrix(R);
+                Vector3 t = new Vector3(colmapMatrix.m03, colmapMatrix.m13, colmapMatrix.m23);
+
+                string imageName = $"{prefix}_{globalImageId:D4}.{imageFormat}";
+                string imagePath = Path.Combine(imagesFolder, imageName);
+
+                cameraToUse.clearFlags = CameraClearFlags.SolidColor;
+                cameraToUse.backgroundColor = new Color(0, 0, 0, 0);
+
+                cameraToUse.targetTexture = rt;
+                cameraToUse.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                CapturePointCloudFromCamera(cameraToUse, tex, rays, writer3D, globalImageId, ref globalPointId);
+
+                byte[] imageData;
+                if (imageFormat == "exr")
+                    imageData = tex.EncodeToEXR(Texture2D.EXRFlags.CompressZIP);
+                else if (useToneMapping)
+                {
+                    Texture2D ldrTex = ApplyToneMapping(tex, exposure);
+                    imageData = ldrTex.EncodeToPNG();
+                    DestroyImmediate(ldrTex);
+                }
+                else
+                    imageData = tex.EncodeToPNG();
+
+                File.WriteAllBytes(imagePath, imageData);
+
+                imgWriter.WriteLine($"{globalImageId} {q.w.ToString(CultureInfo.InvariantCulture)} {q.x.ToString(CultureInfo.InvariantCulture)} {q.y.ToString(CultureInfo.InvariantCulture)} {q.z.ToString(CultureInfo.InvariantCulture)} {t.x.ToString(CultureInfo.InvariantCulture)} {t.y.ToString(CultureInfo.InvariantCulture)} {t.z.ToString(CultureInfo.InvariantCulture)} 1 {imageName}");
+                imgWriter.WriteLine();
+
+                globalImageId++;
+                batchCounter++;
+            };
+
+            int totalModes = (useDomeInCombined ? 1 : 0) + (useSphericalInCombined ? 1 : 0) + (useEllipsoidInCombined ? 1 : 0) + (useCylinderInCombined ? 1 : 0);
+            int currentMode = 0;
+
+            // Capture Dome mode
+            if (useDomeInCombined && target != null)
+            {
+                currentMode++;
+                Debug.Log($"[Combined] Capturing Dome mode ({currentMode}/{totalModes})...");
+
+                for (int ring = 0; ring < numRings; ring++)
+                {
+                    float elevation = Mathf.Lerp(-Mathf.PI / 4, Mathf.PI / 4, (float)ring / (numRings - 1));
+                    for (int i = 0; i < viewsPerRing; i++)
+                    {
+                        float azimuth = i * Mathf.PI * 2 / viewsPerRing;
+                        float x = radius * Mathf.Cos(elevation) * Mathf.Cos(azimuth);
+                        float y = radius * Mathf.Sin(elevation);
+                        float z = radius * Mathf.Cos(elevation) * Mathf.Sin(azimuth);
+
+                        Vector3 position = target.position + new Vector3(x, y + height, z);
+                        captureView(position, target.position, "dome");
+
+                        if (batchCounter >= batchSize)
+                        {
+                            batchCounter = 0;
+                            cameraToUse.targetTexture = null;
+                            RenderTexture.active = null;
+                            GL.Clear(true, true, Color.clear);
+                            DestroyImmediate(rt);
+                            DestroyImmediate(tex);
+                            EditorUtility.UnloadUnusedAssetsImmediate();
+                            GC.Collect();
+                            GC.WaitForPendingFinalizers();
+                            rt = new RenderTexture(w, h, 32, rtFormat);
+                            tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                            yield return null;
+                        }
+
+                        if (cancel)
+                        {
+                            Debug.LogWarning("Capture canceled.");
+                            EditorUtility.ClearProgressBar();
+                            cancel = false;
+                            isRunning = false;
+                            yield break;
+                        }
+                    }
+                }
+            }
+
+            // Capture Spherical mode
+            if (useSphericalInCombined && sphericalTarget != null)
+            {
+                currentMode++;
+                Debug.Log($"[Combined] Capturing Spherical mode ({currentMode}/{totalModes})...");
+
+                List<Vector3> spherePoints = GenerateFibonacciSpherePoints(numSpherePoints, sphereRadius, sphericalTarget.position);
+                foreach (Vector3 position in spherePoints)
+                {
+                    captureView(position, sphericalTarget.position, "sphere");
+
+                    if (batchCounter >= batchSize)
+                    {
+                        batchCounter = 0;
+                        cameraToUse.targetTexture = null;
+                        RenderTexture.active = null;
+                        GL.Clear(true, true, Color.clear);
+                        DestroyImmediate(rt);
+                        DestroyImmediate(tex);
+                        EditorUtility.UnloadUnusedAssetsImmediate();
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        rt = new RenderTexture(w, h, 32, rtFormat);
+                        tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                        yield return null;
+                    }
+
+                    if (cancel)
+                    {
+                        Debug.LogWarning("Capture canceled.");
+                        EditorUtility.ClearProgressBar();
+                        cancel = false;
+                        isRunning = false;
+                        yield break;
+                    }
+                }
+            }
+
+            // Capture Ellipsoid mode
+            if (useEllipsoidInCombined && ellipsoidTarget != null)
+            {
+                currentMode++;
+                Debug.Log($"[Combined] Capturing Ellipsoid mode ({currentMode}/{totalModes})...");
+
+                List<Vector3> ellipsoidPoints = GenerateFibonacciEllipsoidPoints(numEllipsoidPoints, ellipsoidRadiusX, ellipsoidRadiusY, ellipsoidRadiusZ, ellipsoidTarget.position);
+                foreach (Vector3 position in ellipsoidPoints)
+                {
+                    captureView(position, ellipsoidTarget.position, "ellipsoid");
+
+                    if (batchCounter >= batchSize)
+                    {
+                        batchCounter = 0;
+                        cameraToUse.targetTexture = null;
+                        RenderTexture.active = null;
+                        GL.Clear(true, true, Color.clear);
+                        DestroyImmediate(rt);
+                        DestroyImmediate(tex);
+                        EditorUtility.UnloadUnusedAssetsImmediate();
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        rt = new RenderTexture(w, h, 32, rtFormat);
+                        tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                        yield return null;
+                    }
+
+                    if (cancel)
+                    {
+                        Debug.LogWarning("Capture canceled.");
+                        EditorUtility.ClearProgressBar();
+                        cancel = false;
+                        isRunning = false;
+                        yield break;
+                    }
+                }
+            }
+
+            // Capture Cylinder mode
+            if (useCylinderInCombined && cylinderTarget != null)
+            {
+                currentMode++;
+                Debug.Log($"[Combined] Capturing Cylinder mode ({currentMode}/{totalModes})...");
+
+                List<(Vector3, Vector3, bool)> cylinderPoints = GenerateCylinderPoints(numCylinderSidePoints, numCylinderLayers, numCylinderCapPoints, cylinderRadius, cylinderHeight, cylinderTarget.position);
+                foreach (var point in cylinderPoints)
+                {
+                    Vector3 position = point.Item1;
+                    Vector3 lookAt = point.Item2;
+                    captureView(position, lookAt, "cylinder");
+
+                    if (batchCounter >= batchSize)
+                    {
+                        batchCounter = 0;
+                        cameraToUse.targetTexture = null;
+                        RenderTexture.active = null;
+                        GL.Clear(true, true, Color.clear);
+                        DestroyImmediate(rt);
+                        DestroyImmediate(tex);
+                        EditorUtility.UnloadUnusedAssetsImmediate();
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        rt = new RenderTexture(w, h, 32, rtFormat);
+                        tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                        yield return null;
+                    }
+
+                    if (cancel)
+                    {
+                        Debug.LogWarning("Capture canceled.");
+                        EditorUtility.ClearProgressBar();
+                        cancel = false;
+                        isRunning = false;
+                        yield break;
+                    }
+                }
+            }
+
+            writer3D.Close();
+
+            cameraToUse.targetTexture = null;
+            RenderTexture.active = null;
+            DestroyImmediate(rt);
+            DestroyImmediate(tex);
+        }
+
+        Debug.Log($"Combined Capture finished! Total images captured: {globalImageId - 1}");
+        AssetDatabase.Refresh();
+        EditorUtility.ClearProgressBar();
+
+        if (!runtimeAnim)
+            EditorUtility.RevealInFinder(folderPath);
+        isRunning = false;
+
+        if (!runtimeAnim && TrainPostShot)
+        {
+            RunPostshotBatch();
+        }
+
+        yield return new WaitForEndOfFrame();
+        if (EditorApplication.isPaused == true)
+            EditorApplication.isPaused = false;
+    }
+
     private static void StartCaptureVolume(bool isRuntime)
     {
         var window = GetWindow<CameraCaptureEditor>();
@@ -1570,6 +1946,18 @@ public class CameraCaptureEditor : EditorWindow
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureCylinderViewsAndExportColmap(""), window);
+    }
+
+    private static void StartCaptureCombined(bool isRuntime)
+    {
+        var window = GetWindow<CameraCaptureEditor>();
+        if (isRuntime)
+        {
+            Debug.LogWarning("Combined Capture does not support runtime mode yet.");
+            return;
+        }
+        else
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureCombinedViewsAndExportColmap(""), window);
     }
 
 
