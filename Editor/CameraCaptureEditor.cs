@@ -1618,6 +1618,10 @@ public class CameraCaptureEditor : EditorWindow
             camWriter.WriteLine($"1 PINHOLE {w} {h} {fx.ToString(CultureInfo.InvariantCulture)} {fy.ToString(CultureInfo.InvariantCulture)} {cx} {cy}");
         }
 
+        // Define these outside the using block so they're accessible at the end
+        int globalImageId = 1;
+        int totalImagesCount = 0;
+
         // === images.txt and points3D.txt ===
         string imagesTxt = Path.Combine(sparseFolder, "images.txt");
         using (StreamWriter imgWriter = new StreamWriter(imagesTxt))
@@ -1630,7 +1634,6 @@ public class CameraCaptureEditor : EditorWindow
             RenderTexture rt = new RenderTexture(w, h, 32, rtFormat);
             Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
 
-            int globalImageId = 1;
             int globalPointId = 1;
             int batchSize = 40;
             int batchCounter = 0;
@@ -1872,9 +1875,12 @@ public class CameraCaptureEditor : EditorWindow
             RenderTexture.active = null;
             DestroyImmediate(rt);
             DestroyImmediate(tex);
+
+            // Store total count before exiting using block
+            totalImagesCount = globalImageId - 1;
         }
 
-        Debug.Log($"Combined Capture finished! Total images captured: {globalImageId - 1}");
+        Debug.Log($"Combined Capture finished! Total images captured: {totalImagesCount}");
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
