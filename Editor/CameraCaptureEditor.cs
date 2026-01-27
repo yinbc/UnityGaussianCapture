@@ -670,6 +670,19 @@ public class CameraCaptureEditor : EditorWindow
 
 
         Debug.Log("Captures + COLMAP files finished !");
+
+        // Save capture parameters
+        var domeParams = new Dictionary<string, string>
+        {
+            {"Target", target != null ? target.name : "None"},
+            {"Number of Rings", numRings.ToString()},
+            {"Views per Ring", viewsPerRing.ToString()},
+            {"Radius", radius.ToString("F2")},
+            {"Height Offset", height.ToString("F2")},
+            {"Total Images", (numRings * viewsPerRing).ToString()}
+        };
+        SaveCaptureParameters(folderPath, "Dome Capture", domeParams);
+
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
@@ -997,6 +1010,20 @@ public class CameraCaptureEditor : EditorWindow
 
 
         Debug.Log("Captures + COLMAP files finished !");
+
+        // Save capture parameters
+        var volumeParams = new Dictionary<string, string>
+        {
+            {"Volume Center", volumeCenter.ToString()},
+            {"Volume Size", volumeSize.ToString()},
+            {"Subdivisions X", subdivX.ToString()},
+            {"Subdivisions Y", subdivY.ToString()},
+            {"Subdivisions Z", subdivZ.ToString()},
+            {"Total Cells", (subdivX * subdivY * subdivZ).ToString()},
+            {"Directions per Cell", "18"}
+        };
+        SaveCaptureParameters(folderPath, "Volume Capture", volumeParams);
+
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
@@ -1190,6 +1217,17 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         Debug.Log("Spherical Capture + COLMAP files finished!");
+
+        // Save capture parameters
+        var sphericalParams = new Dictionary<string, string>
+        {
+            {"Target", sphericalTarget != null ? sphericalTarget.name : "None"},
+            {"Number of Points", numSpherePoints.ToString()},
+            {"Radius", sphereRadius.ToString("F2")},
+            {"Distribution", "Fibonacci Sphere"}
+        };
+        SaveCaptureParameters(folderPath, "Spherical Capture", sphericalParams);
+
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
@@ -1382,6 +1420,19 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         Debug.Log("Ellipsoid Capture + COLMAP files finished!");
+
+        // Save capture parameters
+        var ellipsoidParams = new Dictionary<string, string>
+        {
+            {"Target", ellipsoidTarget != null ? ellipsoidTarget.name : "None"},
+            {"Number of Points", numEllipsoidPoints.ToString()},
+            {"Radius X", ellipsoidRadiusX.ToString("F2")},
+            {"Radius Y", ellipsoidRadiusY.ToString("F2")},
+            {"Radius Z", ellipsoidRadiusZ.ToString("F2")},
+            {"Distribution", "Fibonacci Ellipsoid"}
+        };
+        SaveCaptureParameters(folderPath, "Ellipsoid Capture", ellipsoidParams);
+
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
@@ -1577,6 +1628,24 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         Debug.Log("Cylinder Capture + COLMAP files finished!");
+
+        // Save capture parameters
+        int totalSidePoints = numCylinderSidePoints * numCylinderLayers;
+        int totalCapPoints = numCylinderCapPoints * 2;
+        var cylinderParams = new Dictionary<string, string>
+        {
+            {"Target", cylinderTarget != null ? cylinderTarget.name : "None"},
+            {"Side Points (per layer)", numCylinderSidePoints.ToString()},
+            {"Side Layers", numCylinderLayers.ToString()},
+            {"Total Side Points", totalSidePoints.ToString()},
+            {"Cap Points (per cap)", numCylinderCapPoints.ToString()},
+            {"Total Cap Points", totalCapPoints.ToString()},
+            {"Total Images", (totalSidePoints + totalCapPoints).ToString()},
+            {"Radius", cylinderRadius.ToString("F2")},
+            {"Height", cylinderHeight.ToString("F2")}
+        };
+        SaveCaptureParameters(folderPath, "Cylinder Capture", cylinderParams);
+
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
@@ -1885,6 +1954,19 @@ public class CameraCaptureEditor : EditorWindow
         }
 
         Debug.Log($"Combined Capture finished! Total images captured: {totalImagesCount}");
+
+        // Save capture parameters
+        var combinedParams = new Dictionary<string, string>
+        {
+            {"Total Images", totalImagesCount.ToString()},
+            {"Dome Capture", useDomeInCombined ? "Yes" : "No"},
+            {"Volume Capture", useVolumeInCombined ? "Yes" : "No"},
+            {"Spherical Capture", useSphericalInCombined ? "Yes" : "No"},
+            {"Ellipsoid Capture", useEllipsoidInCombined ? "Yes" : "No"},
+            {"Cylinder Capture", useCylinderInCombined ? "Yes" : "No"}
+        };
+        SaveCaptureParameters(folderPath, "Combined Capture", combinedParams);
+
         AssetDatabase.Refresh();
         EditorUtility.ClearProgressBar();
 
@@ -2173,6 +2255,81 @@ public class CameraCaptureEditor : EditorWindow
         }
     }
 }
+
+    // Save capture parameters to a text file
+    private void SaveCaptureParameters(string folderPath, string captureMode, Dictionary<string, string> modeSpecificParams = null)
+    {
+        string paramsFile = Path.Combine(folderPath, "capture_parameters.txt");
+
+        using (StreamWriter writer = new StreamWriter(paramsFile))
+        {
+            writer.WriteLine("=== Unity Gaussian Capture Parameters ===");
+            writer.WriteLine($"Timestamp: {System.DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            writer.WriteLine();
+
+            writer.WriteLine("=== General Settings ===");
+            writer.WriteLine($"Capture Mode: {captureMode}");
+            writer.WriteLine($"Resolution: {w} x {h}");
+            writer.WriteLine($"Image Format: {imageFormat.ToUpper()}");
+            writer.WriteLine($"Camera FOV: {cameraToUse.fieldOfView}°");
+            writer.WriteLine($"Points per Cloud: {rays}");
+            writer.WriteLine();
+
+            writer.WriteLine("=== Image Processing ===");
+            if (imageFormat == "png")
+            {
+                writer.WriteLine($"Use Tone Mapping: {useToneMapping}");
+                if (useToneMapping)
+                {
+                    writer.WriteLine($"Exposure: {exposure}");
+                }
+            }
+            else if (imageFormat == "exr")
+            {
+                writer.WriteLine("Compression: ZIP");
+            }
+            writer.WriteLine();
+
+            writer.WriteLine("=== Runtime Settings ===");
+            writer.WriteLine($"Runtime Capture: {runtimeAnim}");
+            if (runtimeAnim)
+            {
+                writer.WriteLine($"Frames per Second: {fbs}");
+                writer.WriteLine($"Duration: {duration}s");
+                writer.WriteLine($"Total Frames: {Mathf.RoundToInt(duration * fbs)}");
+            }
+            writer.WriteLine();
+
+            if (modeSpecificParams != null && modeSpecificParams.Count > 0)
+            {
+                writer.WriteLine($"=== {captureMode} Specific Parameters ===");
+                foreach (var param in modeSpecificParams)
+                {
+                    writer.WriteLine($"{param.Key}: {param.Value}");
+                }
+                writer.WriteLine();
+            }
+
+            writer.WriteLine("=== COLMAP Output Structure ===");
+            writer.WriteLine("images/ - All captured images");
+            writer.WriteLine("sparse/0/ - COLMAP reconstruction files");
+            writer.WriteLine("  - cameras.txt");
+            writer.WriteLine("  - images.txt");
+            writer.WriteLine("  - points3D.txt");
+            writer.WriteLine();
+
+            if (TrainPostShot)
+            {
+                writer.WriteLine("=== PostShot Training ===");
+                writer.WriteLine($"Training Profile: {profile}");
+                writer.WriteLine($"Training Steps: {trainStep}");
+                writer.WriteLine($"Output Format: {outputFormat.ToUpper()}");
+                writer.WriteLine($"PostShot CLI: {PostShotInstallFolder}");
+            }
+        }
+
+        Debug.Log($"Capture parameters saved to: {paramsFile}");
+    }
 
     // Apply Reinhard tone mapping with exposure control
     private Texture2D ApplyToneMapping(Texture2D hdrTex, float exposureValue)
