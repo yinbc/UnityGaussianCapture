@@ -1958,13 +1958,67 @@ public class CameraCaptureEditor : EditorWindow
         // Save capture parameters
         var combinedParams = new Dictionary<string, string>
         {
-            {"Total Images", totalImagesCount.ToString()},
-            {"Dome Capture", useDomeInCombined ? "Yes" : "No"},
-            {"Volume Capture", useVolumeInCombined ? "Yes" : "No"},
-            {"Spherical Capture", useSphericalInCombined ? "Yes" : "No"},
-            {"Ellipsoid Capture", useEllipsoidInCombined ? "Yes" : "No"},
-            {"Cylinder Capture", useCylinderInCombined ? "Yes" : "No"}
+            {"Total Images", totalImagesCount.ToString()}
         };
+
+        // Add detailed parameters for each enabled mode
+        if (useDomeInCombined)
+        {
+            combinedParams.Add("--- Dome Capture ---", "ENABLED");
+            combinedParams.Add("Dome Target", target != null ? target.name : "None");
+            combinedParams.Add("Dome Rings", numRings.ToString());
+            combinedParams.Add("Dome Views per Ring", viewsPerRing.ToString());
+            combinedParams.Add("Dome Radius", radius.ToString("F2"));
+            combinedParams.Add("Dome Height Offset", height.ToString("F2"));
+            combinedParams.Add("Dome Images", (numRings * viewsPerRing).ToString());
+        }
+
+        if (useVolumeInCombined)
+        {
+            combinedParams.Add("--- Volume Capture ---", "ENABLED");
+            combinedParams.Add("Volume Center", volumeCenter.ToString());
+            combinedParams.Add("Volume Size", volumeSize.ToString());
+            combinedParams.Add("Volume Subdivisions X", subdivX.ToString());
+            combinedParams.Add("Volume Subdivisions Y", subdivY.ToString());
+            combinedParams.Add("Volume Subdivisions Z", subdivZ.ToString());
+        }
+
+        if (useSphericalInCombined)
+        {
+            combinedParams.Add("--- Spherical Capture ---", "ENABLED");
+            combinedParams.Add("Spherical Target", sphericalTarget != null ? sphericalTarget.name : "None");
+            combinedParams.Add("Spherical Points", numSpherePoints.ToString());
+            combinedParams.Add("Spherical Radius", sphereRadius.ToString("F2"));
+            combinedParams.Add("Spherical Distribution", "Fibonacci Sphere");
+        }
+
+        if (useEllipsoidInCombined)
+        {
+            combinedParams.Add("--- Ellipsoid Capture ---", "ENABLED");
+            combinedParams.Add("Ellipsoid Target", ellipsoidTarget != null ? ellipsoidTarget.name : "None");
+            combinedParams.Add("Ellipsoid Points", numEllipsoidPoints.ToString());
+            combinedParams.Add("Ellipsoid Radius X", ellipsoidRadiusX.ToString("F2"));
+            combinedParams.Add("Ellipsoid Radius Y", ellipsoidRadiusY.ToString("F2"));
+            combinedParams.Add("Ellipsoid Radius Z", ellipsoidRadiusZ.ToString("F2"));
+            combinedParams.Add("Ellipsoid Distribution", "Fibonacci Ellipsoid");
+        }
+
+        if (useCylinderInCombined)
+        {
+            int totalSidePoints = numCylinderSidePoints * numCylinderLayers;
+            int totalCapPoints = numCylinderCapPoints * 2;
+            combinedParams.Add("--- Cylinder Capture ---", "ENABLED");
+            combinedParams.Add("Cylinder Target", cylinderTarget != null ? cylinderTarget.name : "None");
+            combinedParams.Add("Cylinder Side Points (per layer)", numCylinderSidePoints.ToString());
+            combinedParams.Add("Cylinder Side Layers", numCylinderLayers.ToString());
+            combinedParams.Add("Cylinder Total Side Points", totalSidePoints.ToString());
+            combinedParams.Add("Cylinder Cap Points (per cap)", numCylinderCapPoints.ToString());
+            combinedParams.Add("Cylinder Total Cap Points", totalCapPoints.ToString());
+            combinedParams.Add("Cylinder Images", (totalSidePoints + totalCapPoints).ToString());
+            combinedParams.Add("Cylinder Radius", cylinderRadius.ToString("F2"));
+            combinedParams.Add("Cylinder Height", cylinderHeight.ToString("F2"));
+        }
+
         SaveCaptureParameters(folderPath, "Combined Capture", combinedParams);
 
         AssetDatabase.Refresh();
