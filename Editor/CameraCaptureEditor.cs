@@ -726,7 +726,7 @@ public class CameraCaptureEditor : EditorWindow
                 }
                 var window = GetWindow<CameraCaptureEditor>();
 
-                // captureMode: 0=Dome, 1=Volume, 2=Spherical, 3=Ellipsoid, 4=Cylinder
+                // captureMode: 0=Dome, 1=Volume, 2=Spherical, 3=Ellipsoid, 4=Cylinder, 5=Combined
                 if (captureMode == 0)
                 {
                     yield return window.StartCoroutine(window.CaptureViewsAndExportColmap("/" + i + "/"));
@@ -746,6 +746,10 @@ public class CameraCaptureEditor : EditorWindow
                 else if (captureMode == 4)
                 {
                     yield return window.StartCoroutine(window.CaptureCylinderViewsAndExportColmap("/" + i + "/"));
+                }
+                else if (captureMode == 5)
+                {
+                    yield return window.StartCoroutine(window.CaptureCombinedViewsAndExportColmap("/" + i + "/"));
                 }
             }
             EditorUtility.RevealInFinder(outputFolder);
@@ -1959,8 +1963,7 @@ public class CameraCaptureEditor : EditorWindow
         var window = GetWindow<CameraCaptureEditor>();
         if (isRuntime)
         {
-            Debug.LogWarning("Combined Capture does not support runtime mode yet.");
-            return;
+            window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.WaitForPlayAndCapture(5), window);
         }
         else
             window.captureCoroutine = EditorCoroutineUtility.StartCoroutine(window.CaptureCombinedViewsAndExportColmap(""), window);
