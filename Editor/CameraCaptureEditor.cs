@@ -73,6 +73,11 @@ public class CameraCaptureEditor : EditorWindow
     private bool useEllipsoidInCombined = false;
     private bool useCylinderInCombined = true;
 
+    // Point Cloud Filtering settings
+    private bool useDistanceFilter = false;
+    private float maxDistanceFromTarget = 10f;
+    private LayerMask pointCloudLayerMask = -1; // All layers by default
+
     int w = 1920;
     int h = 1080;
     int rays = 500;
@@ -106,6 +111,15 @@ public class CameraCaptureEditor : EditorWindow
 
         GUILayout.Space(10);
         rays = EditorGUILayout.IntField("PointCloud/View", rays);
+
+        GUILayout.Label("Point Cloud Filtering", EditorStyles.boldLabel);
+        pointCloudLayerMask = EditorGUILayout.MaskField("Layers to Include", pointCloudLayerMask, UnityEditorInternal.InternalEditorUtility.layers);
+        useDistanceFilter = EditorGUILayout.Toggle("Use Distance Filter", useDistanceFilter);
+        if (useDistanceFilter)
+        {
+            maxDistanceFromTarget = EditorGUILayout.FloatField("Max Distance from Target", maxDistanceFromTarget);
+        }
+
         GUILayout.Space(10);
         runtimeAnim = EditorGUILayout.Toggle("Capture Runtime", runtimeAnim);
 
@@ -2279,11 +2293,51 @@ public class CameraCaptureEditor : EditorWindow
     float stepX = width / (float)sqrtRayCount;
     float stepY = height / (float)sqrtRayCount;
 
-        int noCloudLayer = LayerMask.NameToLayer("NoCloud");
+    // Use user-selected layer mask (if all bits are set, it means "Everything")
+    int layerMask = pointCloudLayerMask;
 
-        int layerMask = ~(1 << noCloudLayer); 
+    // Also exclude NoCloud layer
+    int noCloudLayer = LayerMask.NameToLayer("NoCloud");
+    if (noCloudLayer >= 0)
+    {
+        layerMask &= ~(1 << noCloudLayer);
+    }
 
-        for (int i = 0; i < sqrtRayCount; i++)
+    // Get target position for distance filtering (try to find a suitable target)
+    Vector3 filterCenter = Vector3.zero;
+    bool hasFilterCenter = false;
+
+    if (useDistanceFilter)
+    {
+        // Try to use the appropriate target based on current capture mode
+        if (target != null)
+        {
+            filterCenter = target.position;
+            hasFilterCenter = true;
+        }
+        else if (sphericalTarget != null)
+        {
+            filterCenter = sphericalTarget.position;
+            hasFilterCenter = true;
+        }
+        else if (ellipsoidTarget != null)
+        {
+            filterCenter = ellipsoidTarget.position;
+            hasFilterCenter = true;
+        }
+        else if (cylinderTarget != null)
+        {
+            filterCenter = cylinderTarget.position;
+            hasFilterCenter = true;
+        }
+        else
+        {
+            filterCenter = volumeCenter;
+            hasFilterCenter = true;
+        }
+    }
+
+    for (int i = 0; i < sqrtRayCount; i++)
     {
         for (int j = 0; j < sqrtRayCount; j++)
         {
@@ -2292,9 +2346,20 @@ public class CameraCaptureEditor : EditorWindow
 
             Ray ray = cam.ScreenPointToRay(new Vector3(px, py, 0));
 
-                if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, layerMask))
+            if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, layerMask))
+            {
+                Vector3 worldPos = hit.point;
+
+                // Apply distance filter if enabled
+                if (useDistanceFilter && hasFilterCenter)
                 {
-                    Vector3 worldPos = hit.point;
+                    float distance = Vector3.Distance(hit.point, filterCenter);
+                    if (distance > maxDistanceFromTarget)
+                    {
+                        continue; // Skip this point
+                    }
+                }
+
                 worldPos = new Vector3(worldPos.x * -1, worldPos.y, worldPos.z);
 
                 Color color = tex.GetPixel((int)px, (int)py);
@@ -2302,13 +2367,34 @@ public class CameraCaptureEditor : EditorWindow
                 int g = Mathf.Clamp((int)(color.g * 255), 0, 255);
                 int b = Mathf.Clamp((int)(color.b * 255), 0, 255);
 
-
-                    writer.WriteLine($"{pointId} {worldPos.x.ToString(CultureInfo.InvariantCulture)} {worldPos.y.ToString(CultureInfo.InvariantCulture)} {worldPos.z.ToString(CultureInfo.InvariantCulture)} {r} {g} {b} 1.0");
-                    pointId++;
+                writer.WriteLine($"{pointId} {worldPos.x.ToString(CultureInfo.InvariantCulture)} {worldPos.y.ToString(CultureInfo.InvariantCulture)} {worldPos.z.ToString(CultureInfo.InvariantCulture)} {r} {g} {b} 1.0");
+                pointId++;
             }
         }
     }
 }
+
+    // Convert LayerMask to readable string
+    private string LayerMaskToString(LayerMask mask)
+    {
+        if (mask == -1)
+            return "Everything";
+
+        List<string> layerNames = new List<string>();
+        for (int i = 0; i < 32; i++)
+        {
+            if ((mask & (1 << i)) != 0)
+            {
+                string layerName = LayerMask.LayerToName(i);
+                if (!string.IsNullOrEmpty(layerName))
+                {
+                    layerNames.Add(layerName);
+                }
+            }
+        }
+
+        return layerNames.Count > 0 ? string.Join(", ", layerNames) : "Nothing";
+    }
 
     // Save capture parameters to a text file
     private void SaveCaptureParameters(string folderPath, string captureMode, Dictionary<string, string> modeSpecificParams = null)
@@ -2351,6 +2437,15 @@ public class CameraCaptureEditor : EditorWindow
                 writer.WriteLine($"Frames per Second: {fbs}");
                 writer.WriteLine($"Duration: {duration}s");
                 writer.WriteLine($"Total Frames: {Mathf.RoundToInt(duration * fbs)}");
+            }
+            writer.WriteLine();
+
+            writer.WriteLine("=== Point Cloud Filtering ===");
+            writer.WriteLine($"Layer Mask: {pointCloudLayerMask} ({LayerMaskToString(pointCloudLayerMask)})");
+            writer.WriteLine($"Use Distance Filter: {useDistanceFilter}");
+            if (useDistanceFilter)
+            {
+                writer.WriteLine($"Max Distance from Target: {maxDistanceFromTarget:F2}");
             }
             writer.WriteLine();
 
