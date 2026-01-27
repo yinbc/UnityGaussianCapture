@@ -416,7 +416,7 @@ public class CameraCaptureEditor : EditorWindow
 
         // Create COLMAP standard directory structure
         string imagesFolder = Path.Combine(folderPath, "images");
-        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        string sparseFolder = Path.Combine(folderPath, "sparse", "0");
         Directory.CreateDirectory(imagesFolder);
         Directory.CreateDirectory(sparseFolder);
 
@@ -694,7 +694,7 @@ public class CameraCaptureEditor : EditorWindow
 
         // Create COLMAP standard directory structure
         string imagesFolder = Path.Combine(folderPath, "images");
-        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        string sparseFolder = Path.Combine(folderPath, "sparse", "0");
         Directory.CreateDirectory(imagesFolder);
         Directory.CreateDirectory(sparseFolder);
 
@@ -946,7 +946,7 @@ public class CameraCaptureEditor : EditorWindow
 
         // Create COLMAP standard directory structure
         string imagesFolder = Path.Combine(folderPath, "images");
-        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        string sparseFolder = Path.Combine(folderPath, "sparse", "0");
         Directory.CreateDirectory(imagesFolder);
         Directory.CreateDirectory(sparseFolder);
 
@@ -1138,7 +1138,7 @@ public class CameraCaptureEditor : EditorWindow
 
         // Create COLMAP standard directory structure
         string imagesFolder = Path.Combine(folderPath, "images");
-        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        string sparseFolder = Path.Combine(folderPath, "sparse", "0");
         Directory.CreateDirectory(imagesFolder);
         Directory.CreateDirectory(sparseFolder);
 
@@ -1330,7 +1330,7 @@ public class CameraCaptureEditor : EditorWindow
 
         // Create COLMAP standard directory structure
         string imagesFolder = Path.Combine(folderPath, "images");
-        string sparseFolder = Path.Combine(folderPath, "0", "sparse");
+        string sparseFolder = Path.Combine(folderPath, "sparse", "0");
         Directory.CreateDirectory(imagesFolder);
         Directory.CreateDirectory(sparseFolder);
 
