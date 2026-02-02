@@ -90,14 +90,18 @@ bool UGaussianCaptureSubsystem::CaptureView(UWorld* World, const FCameraPosition
 {
 	if (!World)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Invalid world"));
+		UE_LOG(LogTemp, Error, TEXT("CaptureView: Invalid world"));
 		return false;
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("CaptureView: Capturing image %d at position %s with rotation %s"),
+		ImageIndex, *CameraPos.Position.ToString(), *CameraPos.Rotation.ToString());
 
 	// Create or reuse render target
 	if (!RenderTarget || RenderTarget->SizeX != ImageWidth || RenderTarget->SizeY != ImageHeight)
 	{
 		RenderTarget = NewObject<UTextureRenderTarget2D>();
+		RenderTarget->RenderTargetFormat = bTransparent ? RTF_RGBA16f : RTF_RGBA8;
 		RenderTarget->InitAutoFormat(ImageWidth, ImageHeight);
 		RenderTarget->ClearColor = bTransparent ? FLinearColor(0, 0, 0, 0) : FLinearColor::Black;
 		RenderTarget->bAutoGenerateMips = false;
@@ -117,8 +121,25 @@ bool UGaussianCaptureSubsystem::CaptureView(UWorld* World, const FCameraPosition
 	SceneCaptureComponent->FOVAngle = FOV;
 	SceneCaptureComponent->TextureTarget = RenderTarget;
 	SceneCaptureComponent->CaptureSource = bTransparent ? ESceneCaptureSource::SCS_SceneColorHDR : ESceneCaptureSource::SCS_FinalColorLDR;
+	SceneCaptureComponent->ProjectionType = ECameraProjectionMode::Perspective;
 	SceneCaptureComponent->bCaptureEveryFrame = false;
 	SceneCaptureComponent->bCaptureOnMovement = false;
+	SceneCaptureComponent->bAlwaysPersistRenderingState = true;
+
+	// Configure show flags for proper rendering
+	SceneCaptureComponent->ShowFlags.SetAtmosphere(true);
+	SceneCaptureComponent->ShowFlags.SetFog(true);
+	SceneCaptureComponent->ShowFlags.SetLighting(true);
+	SceneCaptureComponent->ShowFlags.SetPostProcessing(true);
+	SceneCaptureComponent->ShowFlags.SetSkyLighting(true);
+	SceneCaptureComponent->ShowFlags.SetDynamicShadows(true);
+	SceneCaptureComponent->ShowFlags.SetStaticMeshes(true);
+	SceneCaptureComponent->ShowFlags.SetSkeletalMeshes(true);
+	SceneCaptureComponent->ShowFlags.SetLandscape(true);
+	SceneCaptureComponent->ShowFlags.SetParticles(true);
+
+	// Set composite mode
+	SceneCaptureComponent->CompositeMode = bTransparent ? SCCM_Overwrite : SCCM_Composite;
 
 	// Capture the scene
 	SceneCaptureComponent->CaptureScene();
@@ -135,6 +156,7 @@ bool UGaussianCaptureSubsystem::SaveTextureToPNG(UTextureRenderTarget2D* InRende
 {
 	if (!InRenderTarget)
 	{
+		UE_LOG(LogTemp, Error, TEXT("SaveTextureToPNG: Invalid render target"));
 		return false;
 	}
 
@@ -143,13 +165,23 @@ bool UGaussianCaptureSubsystem::SaveTextureToPNG(UTextureRenderTarget2D* InRende
 	FTextureRenderTargetResource* RTResource = InRenderTarget->GameThread_GetRenderTargetResource();
 	if (!RTResource)
 	{
+		UE_LOG(LogTemp, Error, TEXT("SaveTextureToPNG: Failed to get render target resource"));
 		return false;
 	}
 
 	if (!RTResource->ReadPixels(OutBMP))
 	{
+		UE_LOG(LogTemp, Error, TEXT("SaveTextureToPNG: Failed to read pixels"));
 		return false;
 	}
+
+	if (OutBMP.Num() == 0)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SaveTextureToPNG: No pixels read from render target"));
+		return false;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SaveTextureToPNG: Read %d pixels from render target"), OutBMP.Num());
 
 	// Get image wrapper module
 	IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
